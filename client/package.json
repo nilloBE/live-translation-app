@@ -13,6 +13,7 @@
     "@microsoft/signalr": "latest",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
+    "microsoft-cognitiveservices-speech-sdk": "^1.49.0",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",

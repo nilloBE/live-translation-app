@@ -56,7 +56,7 @@ This is a web-based live translation application that:
 - **Authentication**: Microsoft Entra ID via `DefaultAzureCredential` (no API keys)
 - **Hosting**: Azure Static Web Apps (frontend) + Azure Container Apps (backend)
 - **Registry**: Azure Container Registry (ACR) for Docker images
-- **Infrastructure**: Azure CLI for resource provisioning + RBAC role assignments
+- **Infrastructure**: Prefer IaC under `infra/` for Azure resources as the project matures; Azure CLI scripts may be used for quick local/dev setup and RBAC role assignments
 
 ### Translation Pairs
 
@@ -96,7 +96,16 @@ This is a web-based live translation application that:
 - Create `.env.example` files (region and resource endpoint only, no keys)
 - Write initial README with setup instructions (including `az login` and Docker for local dev)
 
+Azure resource-group guidance:
+- Use an environment-scoped resource group instead of one shared catch-all group, for example `rg-live-translation-dev`, `rg-live-translation-test`, and `rg-live-translation-prod`.
+- Keep all resources for one app environment in the matching resource group so cleanup, cost review, RBAC, and deployment boundaries stay simple.
+- For Phase 2 local Speech testing, create only the required Azure AI Speech resource and RBAC assignment in the dev resource group. Add SignalR in Phase 3 and deployment resources in Phase 5.
+
 ### Phase 2: Speech Translation (Speaker App - Local)
+- Create or reuse a dev resource group such as `rg-live-translation-dev`
+- Create an Azure AI Speech resource in that resource group, preferably named with an environment suffix such as `speech-live-translation-dev`
+- Configure the Speech resource with a custom subdomain endpoint such as `https://speech-live-translation-dev.cognitiveservices.azure.com`; Entra ID token exchange does not work against the regional API key endpoint
+- Assign the signed-in developer the `Cognitive Services Speech User` role scoped to the Speech resource
 - Implement token endpoint in backend (`/api/speech-token`) using `DefaultAzureCredential`
 - Implement microphone capture in the React speaker app
 - Integrate Azure Speech Translation SDK using authorization tokens (not keys)
@@ -105,7 +114,14 @@ This is a web-based live translation application that:
 - Allow selecting translation pair (FR→NL or ES→FR)
 - Test locally with `az login` credentials and the Azure Speech API
 
+Phase 2 implementation notes:
+- The backend exchanges an Entra ID access token for a short-lived Azure Speech authorization token and returns only the Speech token, region, and expiry metadata to the browser.
+- The backend token exchange uses `SPEECH_ENDPOINT`, the Speech resource custom subdomain endpoint, plus `/sts/v1.0/issueToken`.
+- The frontend refreshes Speech authorization tokens before expiry while a microphone translation session is active.
+- Keep the Speech SDK in the client only; the backend should not receive microphone audio during Phase 2.
+
 ### Phase 3: Real-time Broadcasting (Backend + Audience)
+- Add Azure SignalR Service to the same environment resource group when cloud-scale real-time broadcasting is needed
 - Implement WebSocket/SignalR hub in the backend to relay translations
 - Connect speaker app to backend (send translated text as it arrives)
 - Build audience app that connects to backend and displays live subtitles
@@ -120,8 +136,8 @@ This is a web-based live translation application that:
 - Mobile-responsive design for audience (phone use case)
 
 ### Phase 5: Azure Deployment
-- Create Azure Container Registry (ACR) and build/push backend Docker image
-- Create Azure Container Apps Environment and deploy backend container
+- Create Azure Container Registry (ACR) in the same environment resource group and build/push backend Docker image
+- Create Azure Container Apps Environment in the same environment resource group and deploy backend container
 - Enable system-assigned Managed Identity on the Container App
 - Assign RBAC roles to Managed Identity (Cognitive Services Speech User, SignalR App Server)
 - Deploy frontend to Azure Static Web Apps
@@ -158,8 +174,8 @@ live-translation-app/
 │   └── tsconfig.json
 ├── docker-compose.yml         # Local dev: backend + client together
 ├── scripts/
-│   ├── setup-azure.sh         # Azure CLI provisioning + RBAC
-│   └── deploy.sh              # Build, push to ACR, deploy to Container Apps
+│   ├── setup-azure.ps1        # Azure CLI provisioning + RBAC for Windows dev
+│   └── deploy.ps1             # Build, push to ACR, deploy to Container Apps
 ├── .github/
 │   └── copilot-instructions.md  # This file
 ├── .gitignore                 # Comprehensive ignore rules
@@ -168,94 +184,33 @@ live-translation-app/
 └── package.json               # Root workspace config
 ```
 
-## Azure Resources (via CLI)
+## Azure Resources (PowerShell + Azure CLI)
 
-```bash
-# Resource Group
-az group create --name rg-live-translation --location westeurope
+Use environment-scoped resource groups. For local development, prefer `rg-live-translation-dev`; use separate `test` and `prod` groups later.
 
-# Speech Service (Free tier: F0)
-az cognitiveservices account create \
-  --name speech-live-translation \
-  --resource-group rg-live-translation \
-  --kind SpeechServices \
-  --sku F0 \
-  --location westeurope
+The Windows developer setup script is `scripts/setup-azure.ps1`. It wraps Azure CLI commands, is safe to rerun, and does not create or print API keys or connection strings.
 
-# Assign "Cognitive Services Speech User" role to the current developer
-SPEECH_RESOURCE_ID=$(az cognitiveservices account show \
-  --name speech-live-translation \
-  --resource-group rg-live-translation \
-  --query id -o tsv)
+### Minimal Phase 2 setup
 
-USER_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
-
-az role assignment create \
-  --assignee "$USER_OBJECT_ID" \
-  --role "Cognitive Services Speech User" \
-  --scope "$SPEECH_RESOURCE_ID"
-
-# SignalR Service (Free tier)
-az signalr create \
-  --name signalr-live-translation \
-  --resource-group rg-live-translation \
-  --sku Free_F1 \
-  --service-mode Default \
-  --location westeurope
-
-# Azure Container Registry (Basic tier)
-az acr create \
-  --name acrlivetranslation \
-  --resource-group rg-live-translation \
-  --sku Basic \
-  --admin-enabled false
-
-# Container Apps Environment
-az containerapp env create \
-  --name env-live-translation \
-  --resource-group rg-live-translation \
-  --location westeurope
-
-# Build and deploy backend to Container Apps (uses ACR build)
-az acr build \
-  --registry acrlivetranslation \
-  --image live-translation-api:latest \
-  --file server/Dockerfile \
-  server/
-
-az containerapp create \
-  --name api-live-translation \
-  --resource-group rg-live-translation \
-  --environment env-live-translation \
-  --image acrlivetranslation.azurecr.io/live-translation-api:latest \
-  --registry-server acrlivetranslation.azurecr.io \
-  --target-port 3001 \
-  --ingress external \
-  --system-assigned
-
-# Assign Speech role to the Container App Managed Identity
-APP_IDENTITY=$(az containerapp identity show \
-  --name api-live-translation \
-  --resource-group rg-live-translation \
-  --query principalId -o tsv)
-
-az role assignment create \
-  --assignee "$APP_IDENTITY" \
-  --role "Cognitive Services Speech User" \
-  --scope "$SPEECH_RESOURCE_ID"
-
-# Grant Container App pull access to ACR
-az role assignment create \
-  --assignee "$APP_IDENTITY" \
-  --role "AcrPull" \
-  --scope $(az acr show --name acrlivetranslation --query id -o tsv)
-
-# Static Web App (for frontend)
-az staticwebapp create \
-  --name web-live-translation \
-  --resource-group rg-live-translation \
-  --location westeurope
+```powershell
+.\scripts\setup-azure.ps1
 ```
+
+This creates or reuses:
+- Resource group: `rg-live-translation-dev`
+- Speech resource: `speech-live-translation-dev`
+- Speech custom subdomain endpoint: `https://speech-live-translation-dev.cognitiveservices.azure.com`
+- RBAC: `Cognitive Services Speech User` for the signed-in Azure CLI user scoped to the Speech resource
+
+If the subscription cannot create another free `F0` Speech resource, use an existing Speech resource or change the script SKU to `S0` for the dev environment.
+
+### Full project setup for later phases
+
+```powershell
+.\scripts\setup-azure.ps1 -Mode Full
+```
+
+Full mode also creates or reuses Azure SignalR Service, Azure Container Registry, Azure Container Apps environment, and Azure Static Web App in the same dev resource group. Container image build/push and Container App deployment identity role assignments should be handled by the later deployment script/IaC work in Phase 5.
 
 ## Technical Notes
 
