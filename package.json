@@ -1,0 +1,19 @@
+{
+  "name": "live-translation-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Live browser speech translation with Azure Speech, Entra ID auth, and real-time audience captions.",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
