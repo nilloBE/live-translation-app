@@ -122,11 +122,16 @@ Phase 2 implementation notes:
 
 ### Phase 3: Real-time Broadcasting (Backend + Audience)
 - Add Azure SignalR Service to the same environment resource group when cloud-scale real-time broadcasting is needed
-- Implement WebSocket/SignalR hub in the backend to relay translations
+- Implement local Socket.IO relay in the backend for development-time caption broadcasting
 - Connect speaker app to backend (send translated text as it arrives)
 - Build audience app that connects to backend and displays live subtitles
 - Implement session/room concept so multiple sessions can run simultaneously
 - Test locally: speaker in one browser tab, audience in another
+
+Phase 3 implementation notes:
+- Local development uses Socket.IO rooms; the speaker publishes `caption` payloads and audience clients join a room code to receive them.
+- The backend should relay translated text only, not microphone audio.
+- Azure SignalR Service remains the target for cloud-scale broadcasting in later deployment work.
 
 ### Phase 4: UI Polish & UX
 - Design clean, responsive UI for both speaker and audience views

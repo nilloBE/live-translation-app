@@ -10,13 +10,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@azure/identity": "latest",
     "@azure/core-auth": "latest",
+    "@azure/identity": "latest",
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
     "helmet": "latest",
-    "morgan": "latest"
+    "morgan": "latest",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/cors": "latest",

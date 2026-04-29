@@ -1,12 +1,15 @@
+import { createServer } from "node:http";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import { createAzureCredential } from "./auth.js";
 import { config } from "./config.js";
+import { configureRealtime } from "./realtime.js";
 import { createSpeechTokenRouter } from "./routes/speechToken.js";
 
 const app = express();
+const httpServer = createServer(app);
 const credential = createAzureCredential();
 
 app.use(helmet());
@@ -29,6 +32,7 @@ app.get("/api/config", (_request, response) => {
   response.json({
     speechRegion: config.speechRegion,
     authMode: "entra-id",
+    realtimeMode: "socket.io-local",
     translationPairs: [
       { sourceLanguage: "fr-FR", targetLanguage: "nl" },
       { sourceLanguage: "es-ES", targetLanguage: "fr" },
@@ -53,10 +57,12 @@ app.use(
   },
 );
 
+configureRealtime(httpServer);
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unexpected error";
 }
 
-app.listen(config.port, () => {
+httpServer.listen(config.port, () => {
   console.log(`Live Translation API listening on port ${config.port}`);
 });

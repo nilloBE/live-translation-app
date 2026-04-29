@@ -4,12 +4,14 @@ Live Translation App is a web-based captioning experience for presenters and aud
 
 ## Current Scope
 
-This repository currently includes the Phase 1 scaffold and Phase 2 local Speech translation work:
+This repository currently includes the Phase 1 scaffold, Phase 2 local Speech translation, and Phase 3 local room broadcasting:
 
 - React + TypeScript + Vite frontend in `client/`
 - Node.js + Express + TypeScript backend in `server/`
 - Speech token broker endpoint at `/api/speech-token`
 - Browser microphone translation for French to Dutch and Spanish to French
+- Local Socket.IO caption relay with room codes
+- Speaker and audience views for testing live subtitles in separate browser tabs
 - Backend Dockerfile and local `docker-compose.yml`
 - PowerShell Azure CLI provisioning script in `scripts/setup-azure.ps1`
 - Public-repo-safe `.env.example` files with placeholders only
@@ -90,6 +92,24 @@ SPEECH_ENDPOINT=https://speech-live-translation-dev.cognitiveservices.azure.com
 
 Start the app, open the client, choose a translation pair, and allow microphone access when the browser prompts. The backend calls Azure AI Speech with `DefaultAzureCredential` and returns a short-lived authorization token to the browser; no Speech keys are used.
 
+## Phase 3 Local Broadcasting
+
+The backend runs a local Socket.IO relay for development. The speaker view publishes translated captions to a room code, and the audience view subscribes to the same room code.
+
+To test locally:
+
+```powershell
+npm run dev --workspace @live-translation/server
+npm run dev --workspace @live-translation/client
+```
+
+Open two browser tabs at `http://localhost:5173`:
+
+- In the first tab, use `Speaker`, choose a room code such as `LIVE`, select a translation pair, and click `Start`.
+- In the second tab, use `Audience`, enter the same room code, and watch the translated subtitles appear.
+
+The local relay is intended for development and single-machine testing. Azure SignalR Service is still the planned cloud-scale realtime service for later phases.
+
 ## Azure Resource Setup
 
 Use one Azure resource group per app environment, for example `rg-live-translation-dev`, `rg-live-translation-test`, and `rg-live-translation-prod`. Keep all resources for that environment in its matching resource group so cleanup, RBAC, deployment scope, and cost review stay straightforward.
@@ -101,7 +121,7 @@ For Phase 2 local Speech translation work, the minimal Azure setup is:
 - A Speech custom subdomain endpoint, such as `https://speech-live-translation-dev.cognitiveservices.azure.com`
 - `Cognitive Services Speech User` assigned to your signed-in Azure user on the Speech resource
 
-SignalR belongs to Phase 3. Azure Container Registry, Container Apps, and Static Web Apps belong to Phase 5 deployment work.
+Azure SignalR belongs to the cloud-scale version of the Phase 3 realtime path. Azure Container Registry, Container Apps, and Static Web Apps belong to Phase 5 deployment work.
 
 The setup script defaults to the minimal Phase 2 resource set and assigns the current signed-in user the `Cognitive Services Speech User` role on the Speech resource.
 
@@ -160,4 +180,4 @@ live-translation-app/
 
 ## Next Phases
 
-Phase 3 will add real-time caption broadcasting to audience clients. Phase 5 will add production deployment with managed identity for the backend container.
+Phase 4 will polish the speaker and audience UX. Phase 5 will add production deployment with managed identity for the backend container and cloud-scale realtime broadcasting.

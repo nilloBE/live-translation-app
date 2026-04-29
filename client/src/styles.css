@@ -70,6 +70,35 @@ select {
   text-transform: uppercase;
 }
 
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 28px;
+  border: 1px solid #bdc8d6;
+  border-radius: 8px;
+  padding: 4px;
+  background: #f8fafc;
+}
+
+.view-switch button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  color: #4a5668;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.view-switch button[data-active="true"] {
+  color: #ffffff;
+  background: #263244;
+}
+
 h1,
 h2,
 p {
@@ -103,6 +132,7 @@ h1 {
   border-top: 1px solid #d8e0ea;
 }
 
+.room-input,
 .pair-select {
   display: grid;
   gap: 8px;
@@ -111,6 +141,7 @@ h1 {
   font-weight: 800;
 }
 
+.room-input input,
 .pair-select select {
   width: 100%;
   min-height: 44px;
@@ -119,6 +150,10 @@ h1 {
   padding: 0 12px;
   color: #18212f;
   background: #ffffff;
+}
+
+.room-input input {
+  text-transform: uppercase;
 }
 
 .action-row {
@@ -165,6 +200,23 @@ h1 {
   border-color: #5b8c00;
   color: #315300;
   background: #f2f8e8;
+}
+
+.room-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  color: #566276;
+  font-weight: 700;
+}
+
+.room-strip code {
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #18212f;
+  background: #e9eef5;
 }
 
 .error-banner {
@@ -219,6 +271,54 @@ h1 {
   line-height: 1.55;
 }
 
+.audience-stage {
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.subtitle-text {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  padding: 28px;
+  color: #18212f;
+  background: #f7fbf7;
+  font-size: clamp(1.8rem, 5vw, 3.4rem);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.caption-history {
+  display: grid;
+  gap: 12px;
+}
+
+.caption-history article {
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #f8fafc;
+}
+
+.caption-history span {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.caption-history p {
+  margin: 0;
+  color: #263244;
+  line-height: 1.5;
+}
+
 .config-panel {
   margin-top: 24px;
   padding: 28px;
@@ -257,6 +357,16 @@ dd {
   .transcript-grid {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .view-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .view-switch button {
+    justify-content: center;
   }
 
   .control-bar,
