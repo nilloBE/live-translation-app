@@ -71,7 +71,7 @@ Or run the containerized local setup:
 docker compose up --build
 ```
 
-The client runs on `http://localhost:5173` and the backend runs on `http://localhost:3001`.
+The client normally runs on `http://localhost:5173` and the backend runs on `http://localhost:3001`. If Vite moves to another port such as `5174`, include it in `server/.env` with a comma-separated `CORS_ORIGIN` value.
 
 ## Phase 2 Local Speech Translation
 
@@ -104,7 +104,7 @@ npm run dev --workspace @live-translation/server
 npm run dev --workspace @live-translation/client
 ```
 
-Open two browser tabs at `http://localhost:5173`:
+Open two browser tabs at the Vite URL printed in the terminal, usually `http://localhost:5173`:
 
 - In the first tab, use `Speaker`, choose a room code such as `LIVE`, select a translation pair, and click `Start`.
 - In the second tab, use `Audience`, enter the same room code, and watch the translated subtitles appear.
