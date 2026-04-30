@@ -33,10 +33,8 @@ app.get("/api/config", (_request, response) => {
     speechRegion: config.speechRegion,
     authMode: "entra-id",
     realtimeMode: "socket.io-local",
-    translationPairs: [
-      { sourceLanguage: "fr-FR", targetLanguage: "nl" },
-      { sourceLanguage: "es-ES", targetLanguage: "fr" },
-    ],
+    sourceLanguages: ["en-US", "en-GB", "fr-FR", "es-ES", "de-DE", "it-IT", "pt-PT", "nl-NL", "ja-JP", "zh-CN"],
+    targetLanguages: ["en", "fr", "es", "de", "it", "pt", "nl", "ja", "zh-Hans"],
   });
 });
 

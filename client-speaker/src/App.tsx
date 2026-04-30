@@ -1,9 +1,7 @@
 import { Languages, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AudienceView } from "./components/AudienceView";
 import { SessionControls } from "./components/SessionControls";
 import { SpeakerView } from "./components/SpeakerView";
-import { ViewSwitch, type AppView } from "./components/ViewSwitch";
 import {
   createRealtimeConnection,
   normalizeRoomId,
@@ -18,32 +16,25 @@ import {
 } from "./services/speechTranslation";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
-const audienceTargetStorageKey = "live-translation:audience-target";
 const defaultSpeakerSource = "fr-FR";
 const defaultSpeakerTargets = ["en", "nl", "es"];
-const defaultAudienceTarget = "en";
 
 export function App() {
-  const [activeView, setActiveView] = useState<AppView>("speaker");
   const [roomInput, setRoomInput] = useState(() => generateRoomCode());
   const [speakerSource, setSpeakerSource] = useState<string>(defaultSpeakerSource);
   const [speakerTargets, setSpeakerTargets] = useState<string[]>(defaultSpeakerTargets);
   const [previewTarget, setPreviewTarget] = useState<string>(defaultSpeakerTargets[0]);
-  const [audienceTarget, setAudienceTarget] = useState<string>(() => loadAudienceTarget());
   const [isListening, setIsListening] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [speechStatus, setSpeechStatus] = useState("Ready");
   const [relayStatus, setRelayStatus] = useState("Relay idle");
-  const [audienceStatus, setAudienceStatus] = useState("Disconnected");
   const [audienceCount, setAudienceCount] = useState(0);
-  const [captions, setCaptions] = useState<CaptionMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [originalText, setOriginalText] = useState("");
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const sessionRef = useRef<RunningTranslationSession | null>(null);
   const speakerSocketRef = useRef<RealtimeConnection | null>(null);
-  const audienceSocketRef = useRef<RealtimeConnection | null>(null);
   const speakerRoomRef = useRef<string | null>(null);
 
   const roomId = useMemo(() => normalizeRoomId(roomInput), [roomInput]);
@@ -52,7 +43,6 @@ export function App() {
     return () => {
       void sessionRef.current?.stop();
       speakerSocketRef.current?.disconnect();
-      audienceSocketRef.current?.disconnect();
     };
   }, []);
 
@@ -66,60 +56,6 @@ export function App() {
       setPreviewTarget(speakerTargets[0]);
     }
   }, [speakerTargets, previewTarget]);
-
-  // Persist audience target choice.
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(audienceTargetStorageKey, audienceTarget);
-    } catch {
-      // Ignore storage errors (private mode, etc).
-    }
-  }, [audienceTarget]);
-
-  useEffect(() => {
-    if (activeView !== "audience") {
-      return;
-    }
-
-    const socket = createRealtimeConnection(apiBaseUrl);
-    audienceSocketRef.current = socket;
-    setAudienceStatus("Connecting");
-    setCaptions([]);
-
-    socket.on("connect", () => {
-      socket.emit("join-room", roomId, (presence) => {
-        setAudienceCount(presence.audienceCount);
-        setAudienceStatus(`Joined ${presence.roomId}`);
-      });
-    });
-
-    socket.on("disconnect", () => {
-      setAudienceStatus("Disconnected");
-    });
-
-    socket.on("connect_error", () => {
-      setAudienceStatus("Connection failed");
-    });
-
-    socket.on("room-presence", (presence) => {
-      if (presence.roomId === roomId) {
-        setAudienceCount(presence.audienceCount);
-      }
-    });
-
-    socket.on("caption", (caption) => {
-      setCaptions((currentCaptions) => [...currentCaptions, caption].slice(-10));
-    });
-
-    socket.connect();
-
-    return () => {
-      socket.emit("leave-room", roomId);
-      socket.disconnect();
-      audienceSocketRef.current = null;
-      setAudienceStatus("Disconnected");
-    };
-  }, [activeView, roomId]);
 
   async function startListening() {
     if (isBusy || sessionRef.current) {
@@ -277,20 +213,6 @@ export function App() {
     setNotice("Speaker transcript cleared");
   }
 
-  function clearAudienceCaptions() {
-    setCaptions([]);
-    setNotice("Audience captions cleared");
-  }
-
-  // Audience target options: union of latest broadcast availability and the curated catalog.
-  const audienceOptions = useMemo(() => {
-    const latest = captions.length > 0 ? captions[captions.length - 1] : undefined;
-    const broadcast = latest?.availableTargets ?? [];
-    const codes = new Set<string>([...broadcast, ...targetLanguages.map((language) => language.code)]);
-    return Array.from(codes);
-  }, [captions]);
-
-  const activeEyebrow = activeView === "speaker" ? "Speaker console" : "Audience subtitles";
   const controlsLocked = isListening || isBusy;
 
   return (
@@ -301,12 +223,10 @@ export function App() {
             <Languages size={28} />
           </span>
           <div>
-            <p className="eyebrow">{activeEyebrow}</p>
+            <p className="eyebrow">Speaker console</p>
             <h1 id="app-title">Live Translation App</h1>
           </div>
         </div>
-
-        <ViewSwitch activeView={activeView} onChange={setActiveView} />
 
         <SessionControls
           roomInput={roomInput}
@@ -314,19 +234,15 @@ export function App() {
           onRoomInputChange={handleRoomInputChange}
           onGenerateRoom={handleGenerateRoom}
           onCopyRoom={handleCopyRoom}
-          view={activeView}
           speakerSourceLanguage={speakerSource}
           speakerTargetLanguages={speakerTargets}
           onSpeakerSourceChange={setSpeakerSource}
           onSpeakerTargetToggle={handleSpeakerTargetToggle}
-          audienceTargetLanguage={audienceTarget}
-          audienceTargetOptions={audienceOptions}
-          onAudienceTargetChange={setAudienceTarget}
         />
 
         <div className="room-strip" aria-label="Current room">
           <Send size={16} aria-hidden="true" />
-          <span>{activeView === "speaker" ? "Broadcasting to" : "Watching"}</span>
+          <span>Broadcasting to</span>
           <code>{roomId}</code>
           <span>{audienceCount} connected</span>
         </div>
@@ -336,32 +252,22 @@ export function App() {
           {error ? <p className="error-banner">{error}</p> : null}
         </div>
 
-        {activeView === "speaker" ? (
-          <SpeakerView
-            sourceLanguage={speakerSource}
-            targetLanguages={speakerTargets}
-            previewTarget={previewTarget}
-            onPreviewTargetChange={setPreviewTarget}
-            originalText={originalText}
-            translations={translations}
-            isListening={isListening}
-            isBusy={isBusy}
-            speechStatus={speechStatus}
-            relayStatus={relayStatus}
-            audienceCount={audienceCount}
-            onStart={startListening}
-            onStop={stopListening}
-            onClear={clearSpeakerTranscript}
-          />
-        ) : (
-          <AudienceView
-            captions={captions}
-            audienceStatus={audienceStatus}
-            audienceCount={audienceCount}
-            selectedTarget={audienceTarget}
-            onClear={clearAudienceCaptions}
-          />
-        )}
+        <SpeakerView
+          sourceLanguage={speakerSource}
+          targetLanguages={speakerTargets}
+          previewTarget={previewTarget}
+          onPreviewTargetChange={setPreviewTarget}
+          originalText={originalText}
+          translations={translations}
+          isListening={isListening}
+          isBusy={isBusy}
+          speechStatus={speechStatus}
+          relayStatus={relayStatus}
+          audienceCount={audienceCount}
+          onStart={startListening}
+          onStop={stopListening}
+          onClear={clearSpeakerTranscript}
+        />
       </section>
 
       <section className="panel config-panel" aria-labelledby="config-title">
@@ -397,16 +303,4 @@ function generateRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const randomPart = Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   return `LIVE-${randomPart}`;
-}
-
-function loadAudienceTarget(): string {
-  try {
-    const stored = window.localStorage.getItem(audienceTargetStorageKey);
-    if (stored) {
-      return stored;
-    }
-  } catch {
-    // Ignore storage errors.
-  }
-  return defaultAudienceTarget;
 }

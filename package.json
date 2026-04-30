@@ -4,14 +4,24 @@
   "private": true,
   "description": "Live browser speech translation with Azure Speech, Entra ID auth, and real-time audience captions.",
   "workspaces": [
-    "client",
+    "client-speaker",
+    "client-audience",
+    "shared",
     "server"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "concurrently \"npm run dev:run --workspace @live-translation/server\" \"npm run dev --workspace @live-translation/client-speaker\" \"npm run dev --workspace @live-translation/client-audience\"",
+    "dev:server": "npm run dev --workspace @live-translation/server",
+    "dev:speaker": "npm run dev --workspace @live-translation/client-speaker",
+    "dev:audience": "npm run dev --workspace @live-translation/client-audience",
     "build": "npm run build --workspaces --if-present",
+    "build:speaker": "npm run build --workspace @live-translation/client-speaker",
+    "build:audience": "npm run build --workspace @live-translation/client-audience",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "latest"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -6,13 +6,15 @@ Live Translation App is a web-based captioning experience for presenters and aud
 
 This repository currently includes the Phase 1 scaffold, Phase 2 local Speech translation, Phase 3 local room broadcasting, and Phase 4 UX polish:
 
-- React + TypeScript + Vite frontend in `client/`
+- React + TypeScript + Vite speaker app in `client-speaker/`
+- Minimal React + TypeScript + Vite audience app in `client-audience/`
+- Shared language catalog and realtime client in `shared/`
 - Node.js + Express + TypeScript backend in `server/`
 - Speech token broker endpoint at `/api/speech-token`
 - Browser microphone translation with a freely chosen source language and one or more target languages per session
 - Local Socket.IO caption relay with room codes that broadcasts every translated language at once
-- Speaker and audience views for testing live subtitles in separate browser tabs
-- Per-audience target language selection so each viewer can read in their preferred language
+- Dedicated speaker and audience apps for testing live subtitles in separate browser tabs
+- Audience onboarding in French, Dutch, and English with per-audience target language selection
 - Polished session controls, generated/copyable room codes, status indicators, clear actions, and mobile-friendly subtitles
 - Backend Dockerfile and local `docker-compose.yml`
 - PowerShell Azure CLI provisioning script in `scripts/setup-azure.ps1`
@@ -52,7 +54,8 @@ Copy the examples before running locally:
 
 ```powershell
 Copy-Item .env.example .env
-Copy-Item client/.env.example client/.env
+Copy-Item client-speaker/.env.example client-speaker/.env
+Copy-Item client-audience/.env.example client-audience/.env
 Copy-Item server/.env.example server/.env
 ```
 
@@ -60,10 +63,18 @@ The example files contain only non-secret values such as regions and service URL
 
 ## Local Development
 
-Run both workspaces from the host:
+Run all apps from the host:
 
 ```powershell
 npm run dev
+```
+
+Or run them separately:
+
+```powershell
+npm run dev:server
+npm run dev:speaker
+npm run dev:audience
 ```
 
 Or run the containerized local setup:
@@ -72,7 +83,15 @@ Or run the containerized local setup:
 docker compose up --build
 ```
 
-The client normally runs on `http://localhost:5173` and the backend runs on `http://localhost:3001`. If Vite moves to another port such as `5174`, include it in `server/.env` with a comma-separated `CORS_ORIGIN` value.
+The speaker app normally runs on `http://localhost:5173`, the audience app runs on `http://localhost:5174`, and the backend runs on `http://localhost:3001`. If Vite moves to another port, include it in `server/.env` with a comma-separated `CORS_ORIGIN` value.
+
+## Apps
+
+- **Speaker app** (`client-speaker/`) captures microphone audio, requests short-lived Speech tokens from the backend, previews translations, and broadcasts caption bundles to a room.
+- **Audience app** (`client-audience/`) is a simpler viewer experience. On first visit, it asks for a UI language (`Français`, `Nederlands`, or `English`), then asks for a room code, then shows connection status, speaker language, a `Read in` transcription selector, and live subtitles.
+- **Shared package** (`shared/`) contains the caption protocol, room normalization, language catalog, and Socket.IO client factory used by both apps.
+
+Audience preferences are stored locally with these keys: `live-translation:audience-ui-lang`, `live-translation:audience-room`, and `live-translation:audience-target`.
 
 ## Phase 2 Local Speech Translation
 
@@ -92,7 +111,9 @@ SPEECH_ENDPOINT=https://speech-live-translation-dev.cognitiveservices.azure.com
 
 `SPEECH_ENDPOINT` must be the Speech resource custom subdomain endpoint. Entra ID token exchange does not work with the regional API key endpoint such as `https://westeurope.api.cognitive.microsoft.com`.
 
-Start the app, open the client, choose your spoken language and one or more target languages, and allow microphone access when the browser prompts. The backend calls Azure AI Speech with `DefaultAzureCredential` and returns a short-lived authorization token to the browser; no Speech keys are used.
+Start the app, open the speaker client, choose your spoken language and one or more target languages, and allow microphone access when the browser prompts. The backend calls Azure AI Speech with `DefaultAzureCredential` and returns a short-lived authorization token to the browser; no Speech keys are used.
+
+On some Windows environments Node.js cannot establish TLS to the Speech token endpoint. In that case the backend automatically falls back to a PowerShell child process that uses .NET `HttpClient` to complete the token exchange. This fallback only activates on Windows in development mode. You can override the PowerShell executable with the `PWSH_EXE` environment variable (defaults to `pwsh`).
 
 The speaker console ships with a curated catalog of source languages (English US/UK, French, Spanish, German, Italian, Portuguese, Dutch, Japanese, Mandarin Chinese) and target languages (English, French, Spanish, German, Italian, Portuguese, Dutch, Japanese, Simplified Chinese). A single Speech translation session can target multiple languages simultaneously.
 
@@ -104,13 +125,14 @@ To test locally:
 
 ```powershell
 npm run dev --workspace @live-translation/server
-npm run dev --workspace @live-translation/client
+npm run dev --workspace @live-translation/client-speaker
+npm run dev --workspace @live-translation/client-audience
 ```
 
-Open two browser tabs at the Vite URL printed in the terminal, usually `http://localhost:5173`:
+Open the speaker and audience URLs printed in the terminal:
 
-- In the first tab, use `Speaker`, choose a room code such as `LIVE`, pick your spoken language, toggle one or more target language chips, and click `Start`.
-- In the second tab, use `Audience`, enter the same room code, choose your preferred target language from `Read in`, and watch the translated subtitles appear.
+- In the speaker app (`http://localhost:5173`), choose a room code such as `LIVE`, pick your spoken language, toggle one or more target language chips, and click `Start`.
+- In the audience app (`http://localhost:5174`), choose a UI language, enter the same room code, choose your preferred transcription language from `Read in`, and watch the translated subtitles appear.
 
 The speaker can preview each translated language inline using the preview tabs above the translated transcript without affecting what audience members see. Each audience device renders only the language it has selected; the choice is remembered locally between visits.
 
@@ -123,6 +145,7 @@ The app now has focused speaker and audience controls:
 - Generated room codes with copy and regenerate actions
 - Source language dropdown and multi-select target language chips for the speaker
 - Inline preview tabs so the speaker can switch between target languages locally
+- Separate audience wizard with UI language, room entry, and live caption steps
 - Per-audience `Read in` dropdown that persists between visits via `localStorage`
 - Separate status indicators for microphone/Speech, realtime relay, audience connection, and connected clients
 - Clear actions for speaker transcripts and audience captions
@@ -190,7 +213,9 @@ Full mode also creates:
 
 ```text
 live-translation-app/
-├── client/                    # React frontend
+├── client-speaker/            # Speaker React app with microphone translation
+├── client-audience/           # Audience React app with localized caption viewer
+├── shared/                    # Shared caption protocol, language catalog, realtime client
 ├── server/                    # Express backend
 ├── scripts/setup-azure.ps1    # Azure provisioning script
 ├── docker-compose.yml         # Local containers

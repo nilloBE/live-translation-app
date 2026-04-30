@@ -42,14 +42,15 @@ This is a web-based live translation application that:
 
 ### Key Components
 
-1. **Speaker App** (React) - Captures microphone audio, uses Azure Speech Translation SDK in the browser to get real-time translated text, sends it to the backend.
-2. **Audience App** (React) - Connects to the backend via SignalR and displays live translated subtitles.
-3. **Backend Server** (Node.js/Express) - Token broker for Speech Service + relays translated text to audience via SignalR.
-4. **Azure Resources** - Speech Service, SignalR Service, Container Apps, Container Registry, Static Web Apps (all authenticated via Entra ID/RBAC).
+1. **Speaker App** (`client-speaker/`, React) - Captures microphone audio, uses Azure Speech Translation SDK in the browser to get real-time translated text, sends it to the backend.
+2. **Audience App** (`client-audience/`, React) - Connects to the backend via SignalR/Socket.IO and displays live translated subtitles through a simplified localized viewer.
+3. **Shared Package** (`shared/`) - Caption protocol types, language catalog, room normalization, and realtime client factory shared by the speaker and audience apps.
+4. **Backend Server** (Node.js/Express) - Token broker for Speech Service + relays translated text to audience via SignalR/Socket.IO.
+5. **Azure Resources** - Speech Service, SignalR Service, Container Apps, Container Registry, Static Web Apps (all authenticated via Entra ID/RBAC).
 
 ### Technology Stack
 
-- **Frontend**: React (TypeScript) with Vite
+- **Frontend**: Separate React (TypeScript) + Vite apps for speaker and audience
 - **Backend**: Node.js + Express + `@azure/identity` (Dockerized)
 - **Containerization**: Docker + Docker Compose for local dev, Azure Container Apps for production
 - **Real-time**: Azure SignalR Service (or Socket.IO for local dev)
@@ -145,10 +146,12 @@ Phase 3 implementation notes:
 - Mobile-responsive design for audience (phone use case)
 
 Phase 4 implementation notes:
-- Split the client UI into focused components under `client/src/components/` for speaker, audience, session controls, status badges, and view switching.
-- Room codes should be generated, normalized, and copyable from the UI.
+- Split the frontend into `client-speaker/` and `client-audience/`, with shared protocol, language catalog, and realtime helpers in `shared/`.
+- Room codes should be generated, normalized, and copyable from the speaker UI. The audience UI should accept and remember a normalized room code.
 - Speaker mode should surface microphone/Speech status, realtime relay status, and connected audience count, plus a source language dropdown, a multi-select chip group for target languages, and inline preview tabs to switch between target languages locally.
-- Audience mode should use an accessible live subtitle region, show source text context where useful, expose a `Read in` dropdown for picking the displayed target language, and auto-scroll recent caption history.
+- Audience mode should be a simple three-step flow: choose UI language (`fr`, `nl`, `en`), enter room code, then read live captions.
+- Audience UI language is independent from transcription language. The chosen UI language only defaults the `Read in` selector; each audience member can still pick any target language currently broadcast by the speaker.
+- Audience mode should use an accessible live subtitle region, show source text context where useful, expose connection and speaker-language status, and auto-scroll recent final caption history.
 
 ### Phase 5: Azure Deployment
 - Create Azure Container Registry (ACR) in the same environment resource group and build/push backend Docker image
@@ -165,18 +168,34 @@ Phase 4 implementation notes:
 
 ```
 live-translation-app/
-├── client/                    # React frontend (Vite + TypeScript)
+├── client-speaker/            # Speaker React app (Vite + TypeScript)
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── SpeakerView.tsx    # Speaker's interface
-│   │   │   └── AudienceView.tsx   # Audience's interface
+│   │   │   └── SessionControls.tsx
 │   │   ├── services/
 │   │   │   ├── speechTranslation.ts  # Azure Speech SDK wrapper
-│   │   │   └── realtime.ts           # Socket.IO local realtime client
 │   │   ├── App.tsx
 │   │   └── main.tsx
 │   ├── package.json
 │   └── vite.config.ts
+├── client-audience/           # Audience React app (Vite + TypeScript)
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── LanguagePicker.tsx
+│   │   │   ├── RoomPicker.tsx
+│   │   │   └── LiveCaptionsView.tsx
+│   │   ├── i18n/
+│   │   │   └── strings.ts
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   └── vite.config.ts
+├── shared/                    # Shared caption protocol, language catalog, realtime client
+│   ├── src/
+│   │   └── index.ts
+│   ├── package.json
+│   └── tsconfig.json
 ├── server/                    # Node.js backend (Dockerized)
 │   ├── src/
 │   │   ├── index.ts
@@ -238,3 +257,4 @@ Full mode also creates or reuses Azure SignalR Service, Azure Container Registry
 - **Region**: Using `westeurope` for all resources as it supports both required language pairs and is geographically appropriate.
 - **No API keys anywhere**: All authentication flows use Microsoft Entra ID. Local dev uses `az login`, production uses Managed Identity.
 - **Public repo safety**: `.gitignore` is comprehensive, `.env.example` has no real values, README explicitly warns against committing secrets.
+- **Windows token broker fallback**: On some Windows environments, Node.js cannot establish TLS to the Azure Speech token endpoint (`ECONNRESET`). The backend token broker in `server/src/routes/speechToken.ts` detects this and falls back to spawning a PowerShell process that uses .NET `HttpClient` to complete the token exchange. This fallback activates only on Windows in non-production mode. The `PWSH_EXE` environment variable can override the PowerShell executable (defaults to `pwsh`).

@@ -1,14 +1,13 @@
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 
-export interface SourceLanguage {
-  code: string;
-  displayName: string;
-}
-
-export interface TargetLanguage {
-  code: string;
-  displayName: string;
-}
+export {
+  getSourceLanguageName,
+  getTargetLanguageName,
+  sourceLanguages,
+  targetLanguages,
+  type SourceLanguage,
+  type TargetLanguage,
+} from "@live-translation/shared";
 
 export interface TranslationUpdate {
   originalText: string;
@@ -34,41 +33,6 @@ export interface StartTranslationOptions {
 
 export interface RunningTranslationSession {
   stop: () => Promise<void>;
-}
-
-// Curated source locales (Speech-to-Text format).
-export const sourceLanguages: SourceLanguage[] = [
-  { code: "en-US", displayName: "English (US)" },
-  { code: "en-GB", displayName: "English (UK)" },
-  { code: "fr-FR", displayName: "French" },
-  { code: "es-ES", displayName: "Spanish" },
-  { code: "de-DE", displayName: "German" },
-  { code: "it-IT", displayName: "Italian" },
-  { code: "pt-PT", displayName: "Portuguese" },
-  { code: "nl-NL", displayName: "Dutch" },
-  { code: "ja-JP", displayName: "Japanese" },
-  { code: "zh-CN", displayName: "Chinese (Mandarin)" },
-];
-
-// Curated target codes (Translator format, no region).
-export const targetLanguages: TargetLanguage[] = [
-  { code: "en", displayName: "English" },
-  { code: "fr", displayName: "French" },
-  { code: "es", displayName: "Spanish" },
-  { code: "de", displayName: "German" },
-  { code: "it", displayName: "Italian" },
-  { code: "pt", displayName: "Portuguese" },
-  { code: "nl", displayName: "Dutch" },
-  { code: "ja", displayName: "Japanese" },
-  { code: "zh-Hans", displayName: "Chinese (Simplified)" },
-];
-
-export function getTargetLanguageName(code: string): string {
-  return targetLanguages.find((language) => language.code === code)?.displayName ?? code;
-}
-
-export function getSourceLanguageName(code: string): string {
-  return sourceLanguages.find((language) => language.code === code)?.displayName ?? code;
 }
 
 export async function fetchSpeechToken(apiBaseUrl: string): Promise<SpeechTokenResponse> {

@@ -80,13 +80,11 @@ export function SpeakerView({
             {activePreview ? <code>{activePreview}</code> : null}
           </div>
           {targetLanguages.length > 1 ? (
-            <div className="preview-tabs" role="tablist" aria-label="Preview translations">
+            <div className="preview-tabs" aria-label="Preview translations">
               {targetLanguages.map((code) => (
                 <button
                   key={code}
                   type="button"
-                  role="tab"
-                  aria-selected={code === activePreview}
                   data-active={code === activePreview}
                   onClick={() => onPreviewTargetChange(code)}
                 >

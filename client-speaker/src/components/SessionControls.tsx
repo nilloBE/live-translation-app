@@ -13,16 +13,10 @@ interface SessionControlsProps {
   onRoomInputChange: (roomCode: string) => void;
   onGenerateRoom: () => void;
   onCopyRoom: () => void;
-  // Speaker selections
   speakerSourceLanguage?: string;
   speakerTargetLanguages?: string[];
   onSpeakerSourceChange?: (code: string) => void;
   onSpeakerTargetToggle?: (code: string) => void;
-  // Audience selection
-  audienceTargetLanguage?: string;
-  audienceTargetOptions?: string[];
-  onAudienceTargetChange?: (code: string) => void;
-  view: "speaker" | "audience";
   children?: ReactNode;
 }
 
@@ -36,10 +30,6 @@ export function SessionControls({
   speakerTargetLanguages,
   onSpeakerSourceChange,
   onSpeakerTargetToggle,
-  audienceTargetLanguage,
-  audienceTargetOptions,
-  onAudienceTargetChange,
-  view,
   children,
 }: SessionControlsProps) {
   return (
@@ -62,21 +52,13 @@ export function SessionControls({
         </span>
       </label>
 
-      {view === "speaker" ? (
-        <SpeakerLanguageControls
-          sourceLanguage={speakerSourceLanguage ?? sourceLanguages[0].code}
-          selectedTargets={speakerTargetLanguages ?? []}
-          isLocked={isLocked}
-          onSourceChange={onSpeakerSourceChange ?? (() => {})}
-          onTargetToggle={onSpeakerTargetToggle ?? (() => {})}
-        />
-      ) : (
-        <AudienceLanguageControl
-          target={audienceTargetLanguage}
-          options={audienceTargetOptions ?? []}
-          onChange={onAudienceTargetChange ?? (() => {})}
-        />
-      )}
+      <SpeakerLanguageControls
+        sourceLanguage={speakerSourceLanguage ?? sourceLanguages[0].code}
+        selectedTargets={speakerTargetLanguages ?? []}
+        isLocked={isLocked}
+        onSourceChange={onSpeakerSourceChange ?? (() => {})}
+        onTargetToggle={onSpeakerTargetToggle ?? (() => {})}
+      />
 
       {children}
     </div>
@@ -127,7 +109,6 @@ function SpeakerLanguageControls({
                 className="chip"
                 data-active={isActive}
                 onClick={() => onTargetToggle(language.code)}
-                aria-pressed={isActive}
               >
                 {language.displayName}
               </button>
@@ -139,31 +120,3 @@ function SpeakerLanguageControls({
   );
 }
 
-interface AudienceLanguageControlProps {
-  target?: string;
-  options: string[];
-  onChange: (code: string) => void;
-}
-
-function AudienceLanguageControl({ target, options, onChange }: AudienceLanguageControlProps) {
-  const knownOptions = options.length > 0 ? options : targetLanguages.map((language) => language.code);
-
-  return (
-    <label className="pair-select">
-      <span>Read in</span>
-      <select
-        value={target ?? knownOptions[0] ?? ""}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {knownOptions.map((code) => {
-          const language = targetLanguages.find((entry) => entry.code === code);
-          return (
-            <option key={code} value={code}>
-              {language ? `${language.displayName} (${code})` : code}
-            </option>
-          );
-        })}
-      </select>
-    </label>
-  );
-}

@@ -18,6 +18,12 @@ coverage/
 client/.env
 client/.env.local
 client/.env.*.local
+client-speaker/.env
+client-speaker/.env.local
+client-speaker/.env.*.local
+client-audience/.env
+client-audience/.env.local
+client-audience/.env.*.local
 server/.env
 server/.env.local
 server/.env.*.local

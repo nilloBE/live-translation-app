@@ -1,5 +1,5 @@
 {
-  "name": "@live-translation/client",
+  "name": "@live-translation/client-speaker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,12 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@live-translation/shared": "0.1.0",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
     "microsoft-cognitiveservices-speech-sdk": "^1.49.0",
     "react": "latest",
     "react-dom": "latest",
-    "socket.io-client": "^4.8.3",
     "typescript": "latest",
     "vite": "latest"
   },
