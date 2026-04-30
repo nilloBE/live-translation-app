@@ -9,9 +9,10 @@ This repository currently includes the Phase 1 scaffold, Phase 2 local Speech tr
 - React + TypeScript + Vite frontend in `client/`
 - Node.js + Express + TypeScript backend in `server/`
 - Speech token broker endpoint at `/api/speech-token`
-- Browser microphone translation for French to Dutch and Spanish to French
-- Local Socket.IO caption relay with room codes
+- Browser microphone translation with a freely chosen source language and one or more target languages per session
+- Local Socket.IO caption relay with room codes that broadcasts every translated language at once
 - Speaker and audience views for testing live subtitles in separate browser tabs
+- Per-audience target language selection so each viewer can read in their preferred language
 - Polished session controls, generated/copyable room codes, status indicators, clear actions, and mobile-friendly subtitles
 - Backend Dockerfile and local `docker-compose.yml`
 - PowerShell Azure CLI provisioning script in `scripts/setup-azure.ps1`
@@ -91,7 +92,9 @@ SPEECH_ENDPOINT=https://speech-live-translation-dev.cognitiveservices.azure.com
 
 `SPEECH_ENDPOINT` must be the Speech resource custom subdomain endpoint. Entra ID token exchange does not work with the regional API key endpoint such as `https://westeurope.api.cognitive.microsoft.com`.
 
-Start the app, open the client, choose a translation pair, and allow microphone access when the browser prompts. The backend calls Azure AI Speech with `DefaultAzureCredential` and returns a short-lived authorization token to the browser; no Speech keys are used.
+Start the app, open the client, choose your spoken language and one or more target languages, and allow microphone access when the browser prompts. The backend calls Azure AI Speech with `DefaultAzureCredential` and returns a short-lived authorization token to the browser; no Speech keys are used.
+
+The speaker console ships with a curated catalog of source languages (English US/UK, French, Spanish, German, Italian, Portuguese, Dutch, Japanese, Mandarin Chinese) and target languages (English, French, Spanish, German, Italian, Portuguese, Dutch, Japanese, Simplified Chinese). A single Speech translation session can target multiple languages simultaneously.
 
 ## Phase 3 Local Broadcasting
 
@@ -106,8 +109,10 @@ npm run dev --workspace @live-translation/client
 
 Open two browser tabs at the Vite URL printed in the terminal, usually `http://localhost:5173`:
 
-- In the first tab, use `Speaker`, choose a room code such as `LIVE`, select a translation pair, and click `Start`.
-- In the second tab, use `Audience`, enter the same room code, and watch the translated subtitles appear.
+- In the first tab, use `Speaker`, choose a room code such as `LIVE`, pick your spoken language, toggle one or more target language chips, and click `Start`.
+- In the second tab, use `Audience`, enter the same room code, choose your preferred target language from `Read in`, and watch the translated subtitles appear.
+
+The speaker can preview each translated language inline using the preview tabs above the translated transcript without affecting what audience members see. Each audience device renders only the language it has selected; the choice is remembered locally between visits.
 
 The local relay is intended for development and single-machine testing. Azure SignalR Service is still the planned cloud-scale realtime service for later phases.
 
@@ -116,6 +121,9 @@ The local relay is intended for development and single-machine testing. Azure Si
 The app now has focused speaker and audience controls:
 
 - Generated room codes with copy and regenerate actions
+- Source language dropdown and multi-select target language chips for the speaker
+- Inline preview tabs so the speaker can switch between target languages locally
+- Per-audience `Read in` dropdown that persists between visits via `localStorage`
 - Separate status indicators for microphone/Speech, realtime relay, audience connection, and connected clients
 - Clear actions for speaker transcripts and audience captions
 - Larger audience subtitle display with original source text in caption history

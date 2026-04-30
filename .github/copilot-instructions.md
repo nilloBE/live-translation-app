@@ -4,7 +4,8 @@
 
 This is a web-based live translation application that:
 - Captures audio from a speaker (presenter) and translates it in real-time
-- Supports **French → Dutch** and **Spanish → French** translation pairs
+- Lets the speaker pick any supported source language and one or more target languages per session
+- Lets each audience member pick which target language they want to read
 - Broadcasts the translated transcription to audience members via a separate web view
 - Audience can connect from phones or computers to see live subtitles
 - **No API keys** — uses Microsoft Entra ID (Azure AD) authentication exclusively
@@ -58,12 +59,14 @@ This is a web-based live translation application that:
 - **Registry**: Azure Container Registry (ACR) for Docker images
 - **Infrastructure**: Prefer IaC under `infra/` for Azure resources as the project matures; Azure CLI scripts may be used for quick local/dev setup and RBAC role assignments
 
-### Translation Pairs
+### Translation Languages
 
-| Source Language | Target Language | Speech SDK Codes |
-|---------------|----------------|------------------|
-| French        | Dutch          | `fr-FR` → `nl`  |
-| Spanish       | French         | `es-ES` → `fr`  |
+The speaker chooses a single source language and one or more target languages per session. A single Azure Speech `TranslationRecognizer` serves all selected targets via `addTargetLanguage`, and each caption broadcast contains a `translations` map keyed by target language code so each audience device can render only the language it has selected.
+
+| Direction | Supported codes |
+|-----------|----------------|
+| Source (Speech-to-Text locales) | `en-US`, `en-GB`, `fr-FR`, `es-ES`, `de-DE`, `it-IT`, `pt-PT`, `nl-NL`, `ja-JP`, `zh-CN` |
+| Target (Translator codes) | `en`, `fr`, `es`, `de`, `it`, `pt`, `nl`, `ja`, `zh-Hans` |
 
 ## Security Rules (Public Repository)
 
@@ -111,7 +114,7 @@ Azure resource-group guidance:
 - Integrate Azure Speech Translation SDK using authorization tokens (not keys)
 - Support continuous recognition mode for real-time translation
 - Display original transcription and translated text in the speaker UI
-- Allow selecting translation pair (FR→NL or ES→FR)
+- Allow the speaker to pick a source language and one or more target languages from the curated catalog
 - Test locally with `az login` credentials and the Azure Speech API
 
 Phase 2 implementation notes:
@@ -129,8 +132,9 @@ Phase 2 implementation notes:
 - Test locally: speaker in one browser tab, audience in another
 
 Phase 3 implementation notes:
-- Local development uses Socket.IO rooms; the speaker publishes `caption` payloads and audience clients join a room code to receive them.
+- Local development uses Socket.IO rooms; the speaker publishes `caption` payloads (containing the source language, the list of available targets, and a `translations` map) and audience clients join a room code to receive them.
 - The backend should relay translated text only, not microphone audio.
+- Each audience client picks its preferred target language and renders only that entry from the `translations` map; the selection persists in `localStorage`.
 - Azure SignalR Service remains the target for cloud-scale broadcasting in later deployment work.
 
 ### Phase 4: UI Polish & UX
@@ -143,8 +147,8 @@ Phase 3 implementation notes:
 Phase 4 implementation notes:
 - Split the client UI into focused components under `client/src/components/` for speaker, audience, session controls, status badges, and view switching.
 - Room codes should be generated, normalized, and copyable from the UI.
-- Speaker mode should surface microphone/Speech status, realtime relay status, and connected audience count.
-- Audience mode should use an accessible live subtitle region, show source text context where useful, and auto-scroll recent caption history.
+- Speaker mode should surface microphone/Speech status, realtime relay status, and connected audience count, plus a source language dropdown, a multi-select chip group for target languages, and inline preview tabs to switch between target languages locally.
+- Audience mode should use an accessible live subtitle region, show source text context where useful, expose a `Read in` dropdown for picking the displayed target language, and auto-scroll recent caption history.
 
 ### Phase 5: Azure Deployment
 - Create Azure Container Registry (ACR) in the same environment resource group and build/push backend Docker image

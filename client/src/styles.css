@@ -403,6 +403,83 @@ h1 {
   line-height: 1.4;
 }
 
+.target-multiselect {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 360px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #18212f;
+  font-weight: 800;
+}
+
+.target-multiselect legend {
+  padding: 0;
+  font-weight: 800;
+}
+
+.target-multiselect[disabled] {
+  opacity: 0.7;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: 1px solid #bdc8d6;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #4a5668;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.chip[data-active="true"] {
+  border-color: #0f766e;
+  color: #ffffff;
+  background: #0f766e;
+}
+
+.target-multiselect[disabled] .chip {
+  cursor: not-allowed;
+}
+
+.preview-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.preview-tabs button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border: 1px solid #bdc8d6;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #4a5668;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.preview-tabs button[data-active="true"] {
+  border-color: #0f766e;
+  color: #0f766e;
+  background: #ecfdf5;
+}
+
 .config-panel {
   margin-top: 24px;
   padding: 28px;

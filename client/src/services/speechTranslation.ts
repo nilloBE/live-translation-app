@@ -1,19 +1,18 @@
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 
-export type TranslationPairId = "fr-nl" | "es-fr";
+export interface SourceLanguage {
+  code: string;
+  displayName: string;
+}
 
-export interface TranslationPair {
-  id: TranslationPairId;
-  label: string;
-  sourceLanguage: string;
-  targetLanguage: string;
-  sourceName: string;
-  targetName: string;
+export interface TargetLanguage {
+  code: string;
+  displayName: string;
 }
 
 export interface TranslationUpdate {
   originalText: string;
-  translatedText: string;
+  translations: Record<string, string>;
   reason: "recognizing" | "recognized";
 }
 
@@ -26,7 +25,8 @@ export interface SpeechTokenResponse {
 
 export interface StartTranslationOptions {
   apiBaseUrl: string;
-  pair: TranslationPair;
+  sourceLanguage: string;
+  targetLanguages: string[];
   onUpdate: (update: TranslationUpdate) => void;
   onStatus: (status: string) => void;
   onError: (message: string) => void;
@@ -36,24 +36,40 @@ export interface RunningTranslationSession {
   stop: () => Promise<void>;
 }
 
-export const translationPairs: TranslationPair[] = [
-  {
-    id: "fr-nl",
-    label: "French to Dutch",
-    sourceLanguage: "fr-FR",
-    targetLanguage: "nl",
-    sourceName: "French",
-    targetName: "Dutch",
-  },
-  {
-    id: "es-fr",
-    label: "Spanish to French",
-    sourceLanguage: "es-ES",
-    targetLanguage: "fr",
-    sourceName: "Spanish",
-    targetName: "French",
-  },
+// Curated source locales (Speech-to-Text format).
+export const sourceLanguages: SourceLanguage[] = [
+  { code: "en-US", displayName: "English (US)" },
+  { code: "en-GB", displayName: "English (UK)" },
+  { code: "fr-FR", displayName: "French" },
+  { code: "es-ES", displayName: "Spanish" },
+  { code: "de-DE", displayName: "German" },
+  { code: "it-IT", displayName: "Italian" },
+  { code: "pt-PT", displayName: "Portuguese" },
+  { code: "nl-NL", displayName: "Dutch" },
+  { code: "ja-JP", displayName: "Japanese" },
+  { code: "zh-CN", displayName: "Chinese (Mandarin)" },
 ];
+
+// Curated target codes (Translator format, no region).
+export const targetLanguages: TargetLanguage[] = [
+  { code: "en", displayName: "English" },
+  { code: "fr", displayName: "French" },
+  { code: "es", displayName: "Spanish" },
+  { code: "de", displayName: "German" },
+  { code: "it", displayName: "Italian" },
+  { code: "pt", displayName: "Portuguese" },
+  { code: "nl", displayName: "Dutch" },
+  { code: "ja", displayName: "Japanese" },
+  { code: "zh-Hans", displayName: "Chinese (Simplified)" },
+];
+
+export function getTargetLanguageName(code: string): string {
+  return targetLanguages.find((language) => language.code === code)?.displayName ?? code;
+}
+
+export function getSourceLanguageName(code: string): string {
+  return sourceLanguages.find((language) => language.code === code)?.displayName ?? code;
+}
 
 export async function fetchSpeechToken(apiBaseUrl: string): Promise<SpeechTokenResponse> {
   const response = await fetch(`${apiBaseUrl}/api/speech-token`);
@@ -67,19 +83,26 @@ export async function fetchSpeechToken(apiBaseUrl: string): Promise<SpeechTokenR
 
 export async function startTranslationSession({
   apiBaseUrl,
-  pair,
+  sourceLanguage,
+  targetLanguages: requestedTargets,
   onUpdate,
   onStatus,
   onError,
 }: StartTranslationOptions): Promise<RunningTranslationSession> {
+  if (requestedTargets.length === 0) {
+    throw new Error("Select at least one target language before starting translation.");
+  }
+
   const tokenResponse = await fetchSpeechToken(apiBaseUrl);
   const speechConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(
     tokenResponse.token,
     tokenResponse.region,
   );
 
-  speechConfig.speechRecognitionLanguage = pair.sourceLanguage;
-  speechConfig.addTargetLanguage(pair.targetLanguage);
+  speechConfig.speechRecognitionLanguage = sourceLanguage;
+  for (const target of requestedTargets) {
+    speechConfig.addTargetLanguage(target);
+  }
 
   const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   const recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
@@ -88,7 +111,7 @@ export async function startTranslationSession({
   recognizer.recognizing = (_sender, event) => {
     onUpdate({
       originalText: event.result.text,
-      translatedText: readTranslation(event.result, pair.targetLanguage),
+      translations: readTranslations(event.result, requestedTargets),
       reason: "recognizing",
     });
   };
@@ -97,7 +120,7 @@ export async function startTranslationSession({
     if (event.result.reason === SpeechSDK.ResultReason.TranslatedSpeech) {
       onUpdate({
         originalText: event.result.text,
-        translatedText: readTranslation(event.result, pair.targetLanguage),
+        translations: readTranslations(event.result, requestedTargets),
         reason: "recognized",
       });
     }
@@ -138,8 +161,18 @@ export async function startTranslationSession({
   };
 }
 
-function readTranslation(result: SpeechSDK.TranslationRecognitionResult, targetLanguage: string) {
-  return result.translations.get(targetLanguage) ?? "";
+function readTranslations(
+  result: SpeechSDK.TranslationRecognitionResult,
+  targets: string[],
+): Record<string, string> {
+  const translations: Record<string, string> = {};
+  for (const code of targets) {
+    const value = result.translations.get(code);
+    if (value) {
+      translations[code] = value;
+    }
+  }
+  return translations;
 }
 
 function startRecognizer(recognizer: SpeechSDK.TranslationRecognizer) {

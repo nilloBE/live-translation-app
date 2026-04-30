@@ -5,9 +5,9 @@ import { config } from "./config.js";
 export interface CaptionPayload {
   roomId: string;
   sourceLanguage: string;
-  targetLanguage: string;
+  availableTargets: string[];
   originalText: string;
-  translatedText: string;
+  translations: Record<string, string>;
   isFinal: boolean;
   timestamp: string;
 }
@@ -69,9 +69,9 @@ function normalizeCaption(payload: CaptionPayload): CaptionPayload {
   return {
     roomId: normalizeRoomId(payload.roomId),
     sourceLanguage: payload.sourceLanguage,
-    targetLanguage: payload.targetLanguage,
+    availableTargets: Array.isArray(payload.availableTargets) ? payload.availableTargets : [],
     originalText: payload.originalText,
-    translatedText: payload.translatedText,
+    translations: payload.translations && typeof payload.translations === "object" ? payload.translations : {},
     isFinal: payload.isFinal,
     timestamp: payload.timestamp || new Date().toISOString(),
   };

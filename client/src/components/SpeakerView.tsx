@@ -1,11 +1,17 @@
 import { Eraser, Mic, MicOff, Radio, Square } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
-import type { TranslationPair } from "../services/speechTranslation";
+import {
+  getSourceLanguageName,
+  getTargetLanguageName,
+} from "../services/speechTranslation";
 
 interface SpeakerViewProps {
-  selectedPair: TranslationPair;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  previewTarget: string | undefined;
+  onPreviewTargetChange: (code: string) => void;
   originalText: string;
-  translatedText: string;
+  translations: Record<string, string>;
   isListening: boolean;
   isBusy: boolean;
   speechStatus: string;
@@ -17,9 +23,12 @@ interface SpeakerViewProps {
 }
 
 export function SpeakerView({
-  selectedPair,
+  sourceLanguage,
+  targetLanguages,
+  previewTarget,
+  onPreviewTargetChange,
   originalText,
-  translatedText,
+  translations,
   isListening,
   isBusy,
   speechStatus,
@@ -29,6 +38,8 @@ export function SpeakerView({
   onStop,
   onClear,
 }: SpeakerViewProps) {
+  const activePreview = previewTarget ?? targetLanguages[0];
+
   return (
     <>
       <div className="action-row">
@@ -36,7 +47,7 @@ export function SpeakerView({
           className="primary-action"
           type="button"
           onClick={isListening ? onStop : onStart}
-          disabled={isBusy}
+          disabled={isBusy || targetLanguages.length === 0}
           aria-label={isListening ? "Stop translation" : "Start translation"}
         >
           {isListening ? <Square size={20} aria-hidden="true" /> : <Mic size={20} aria-hidden="true" />}
@@ -57,18 +68,34 @@ export function SpeakerView({
       <section className="transcript-grid" aria-label="Live translation transcript">
         <article className="transcript-panel">
           <div className="transcript-heading">
-            <span>{selectedPair.sourceName}</span>
-            <code>{selectedPair.sourceLanguage}</code>
+            <span>{getSourceLanguageName(sourceLanguage)}</span>
+            <code>{sourceLanguage}</code>
           </div>
           <p>{originalText || "Waiting for speech"}</p>
         </article>
 
         <article className="transcript-panel translated-panel">
           <div className="transcript-heading">
-            <span>{selectedPair.targetName}</span>
-            <code>{selectedPair.targetLanguage}</code>
+            <span>{activePreview ? getTargetLanguageName(activePreview) : "No target selected"}</span>
+            {activePreview ? <code>{activePreview}</code> : null}
           </div>
-          <p>{translatedText || "Waiting for translation"}</p>
+          {targetLanguages.length > 1 ? (
+            <div className="preview-tabs" role="tablist" aria-label="Preview translations">
+              {targetLanguages.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  role="tab"
+                  aria-selected={code === activePreview}
+                  data-active={code === activePreview}
+                  onClick={() => onPreviewTargetChange(code)}
+                >
+                  {getTargetLanguageName(code)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <p>{(activePreview && translations[activePreview]) || "Waiting for translation"}</p>
         </article>
       </section>
     </>

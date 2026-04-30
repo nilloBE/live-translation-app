@@ -3,9 +3,9 @@ import { io, type Socket } from "socket.io-client";
 export interface CaptionMessage {
   roomId: string;
   sourceLanguage: string;
-  targetLanguage: string;
+  availableTargets: string[];
   originalText: string;
-  translatedText: string;
+  translations: Record<string, string>;
   isFinal: boolean;
   timestamp: string;
 }

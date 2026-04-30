@@ -12,17 +12,24 @@ import {
 } from "./services/realtime";
 import {
   startTranslationSession,
-  translationPairs,
+  sourceLanguages,
+  targetLanguages,
   type RunningTranslationSession,
-  type TranslationPairId,
 } from "./services/speechTranslation";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const audienceTargetStorageKey = "live-translation:audience-target";
+const defaultSpeakerSource = "fr-FR";
+const defaultSpeakerTargets = ["en", "nl", "es"];
+const defaultAudienceTarget = "en";
 
 export function App() {
   const [activeView, setActiveView] = useState<AppView>("speaker");
   const [roomInput, setRoomInput] = useState(() => generateRoomCode());
-  const [selectedPairId, setSelectedPairId] = useState<TranslationPairId>("fr-nl");
+  const [speakerSource, setSpeakerSource] = useState<string>(defaultSpeakerSource);
+  const [speakerTargets, setSpeakerTargets] = useState<string[]>(defaultSpeakerTargets);
+  const [previewTarget, setPreviewTarget] = useState<string>(defaultSpeakerTargets[0]);
+  const [audienceTarget, setAudienceTarget] = useState<string>(() => loadAudienceTarget());
   const [isListening, setIsListening] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [speechStatus, setSpeechStatus] = useState("Ready");
@@ -33,17 +40,13 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [originalText, setOriginalText] = useState("");
-  const [translatedText, setTranslatedText] = useState("");
+  const [translations, setTranslations] = useState<Record<string, string>>({});
   const sessionRef = useRef<RunningTranslationSession | null>(null);
   const speakerSocketRef = useRef<RealtimeConnection | null>(null);
   const audienceSocketRef = useRef<RealtimeConnection | null>(null);
   const speakerRoomRef = useRef<string | null>(null);
 
   const roomId = useMemo(() => normalizeRoomId(roomInput), [roomInput]);
-  const selectedPair = useMemo(
-    () => translationPairs.find((pair) => pair.id === selectedPairId) ?? translationPairs[0],
-    [selectedPairId],
-  );
 
   useEffect(() => {
     return () => {
@@ -52,6 +55,26 @@ export function App() {
       audienceSocketRef.current?.disconnect();
     };
   }, []);
+
+  // Keep preview target valid as the speaker changes targets.
+  useEffect(() => {
+    if (speakerTargets.length === 0) {
+      setPreviewTarget("");
+      return;
+    }
+    if (!speakerTargets.includes(previewTarget)) {
+      setPreviewTarget(speakerTargets[0]);
+    }
+  }, [speakerTargets, previewTarget]);
+
+  // Persist audience target choice.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(audienceTargetStorageKey, audienceTarget);
+    } catch {
+      // Ignore storage errors (private mode, etc).
+    }
+  }, [audienceTarget]);
 
   useEffect(() => {
     if (activeView !== "audience") {
@@ -102,6 +125,10 @@ export function App() {
     if (isBusy || sessionRef.current) {
       return;
     }
+    if (speakerTargets.length === 0) {
+      setError("Select at least one target language to translate to.");
+      return;
+    }
 
     setIsBusy(true);
     setError(null);
@@ -109,10 +136,13 @@ export function App() {
     setSpeechStatus("Connecting microphone");
     connectSpeakerRelay();
 
+    const sessionTargets = [...speakerTargets];
+
     try {
       sessionRef.current = await startTranslationSession({
         apiBaseUrl,
-        pair: selectedPair,
+        sourceLanguage: speakerSource,
+        targetLanguages: sessionTargets,
         onStatus: setSpeechStatus,
         onError: (message) => {
           setError(message);
@@ -122,17 +152,16 @@ export function App() {
           if (update.originalText) {
             setOriginalText(update.originalText);
           }
-
-          if (update.translatedText) {
-            setTranslatedText(update.translatedText);
+          if (Object.keys(update.translations).length > 0) {
+            setTranslations(update.translations);
           }
 
           publishCaption({
             roomId,
-            sourceLanguage: selectedPair.sourceLanguage,
-            targetLanguage: selectedPair.targetLanguage,
+            sourceLanguage: speakerSource,
+            availableTargets: sessionTargets,
             originalText: update.originalText,
-            translatedText: update.translatedText,
+            translations: update.translations,
             isFinal: update.reason === "recognized",
             timestamp: new Date().toISOString(),
           });
@@ -183,10 +212,9 @@ export function App() {
   }
 
   function publishCaption(caption: CaptionMessage) {
-    if (!caption.translatedText) {
+    if (Object.keys(caption.translations).length === 0) {
       return;
     }
-
     const socket = getSpeakerSocket();
     socket.emit("publish-caption", caption);
   }
@@ -234,9 +262,18 @@ export function App() {
     }
   }
 
+  function handleSpeakerTargetToggle(code: string) {
+    setSpeakerTargets((current) => {
+      if (current.includes(code)) {
+        return current.filter((entry) => entry !== code);
+      }
+      return [...current, code];
+    });
+  }
+
   function clearSpeakerTranscript() {
     setOriginalText("");
-    setTranslatedText("");
+    setTranslations({});
     setNotice("Speaker transcript cleared");
   }
 
@@ -244,6 +281,14 @@ export function App() {
     setCaptions([]);
     setNotice("Audience captions cleared");
   }
+
+  // Audience target options: union of latest broadcast availability and the curated catalog.
+  const audienceOptions = useMemo(() => {
+    const latest = captions.length > 0 ? captions[captions.length - 1] : undefined;
+    const broadcast = latest?.availableTargets ?? [];
+    const codes = new Set<string>([...broadcast, ...targetLanguages.map((language) => language.code)]);
+    return Array.from(codes);
+  }, [captions]);
 
   const activeEyebrow = activeView === "speaker" ? "Speaker console" : "Audience subtitles";
   const controlsLocked = isListening || isBusy;
@@ -265,15 +310,19 @@ export function App() {
 
         <SessionControls
           roomInput={roomInput}
-          selectedPairId={selectedPairId}
           isLocked={controlsLocked}
           onRoomInputChange={handleRoomInputChange}
           onGenerateRoom={handleGenerateRoom}
           onCopyRoom={handleCopyRoom}
-          onPairChange={setSelectedPairId}
-        >
-          {activeView === "speaker" ? null : <span className="audience-room-spacer" aria-hidden="true" />}
-        </SessionControls>
+          view={activeView}
+          speakerSourceLanguage={speakerSource}
+          speakerTargetLanguages={speakerTargets}
+          onSpeakerSourceChange={setSpeakerSource}
+          onSpeakerTargetToggle={handleSpeakerTargetToggle}
+          audienceTargetLanguage={audienceTarget}
+          audienceTargetOptions={audienceOptions}
+          onAudienceTargetChange={setAudienceTarget}
+        />
 
         <div className="room-strip" aria-label="Current room">
           <Send size={16} aria-hidden="true" />
@@ -289,9 +338,12 @@ export function App() {
 
         {activeView === "speaker" ? (
           <SpeakerView
-            selectedPair={selectedPair}
+            sourceLanguage={speakerSource}
+            targetLanguages={speakerTargets}
+            previewTarget={previewTarget}
+            onPreviewTargetChange={setPreviewTarget}
             originalText={originalText}
-            translatedText={translatedText}
+            translations={translations}
             isListening={isListening}
             isBusy={isBusy}
             speechStatus={speechStatus}
@@ -306,6 +358,7 @@ export function App() {
             captions={captions}
             audienceStatus={audienceStatus}
             audienceCount={audienceCount}
+            selectedTarget={audienceTarget}
             onClear={clearAudienceCaptions}
           />
         )}
@@ -319,8 +372,12 @@ export function App() {
             <dd>{apiBaseUrl}</dd>
           </div>
           <div>
-            <dt>Translation pairs</dt>
-            <dd>{translationPairs.map((pair) => pair.label).join(", ")}</dd>
+            <dt>Source languages</dt>
+            <dd>{sourceLanguages.map((language) => language.displayName).join(", ")}</dd>
+          </div>
+          <div>
+            <dt>Target languages</dt>
+            <dd>{targetLanguages.map((language) => language.displayName).join(", ")}</dd>
           </div>
           <div>
             <dt>Realtime room</dt>
@@ -340,4 +397,16 @@ function generateRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const randomPart = Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   return `LIVE-${randomPart}`;
+}
+
+function loadAudienceTarget(): string {
+  try {
+    const stored = window.localStorage.getItem(audienceTargetStorageKey);
+    if (stored) {
+      return stored;
+    }
+  } catch {
+    // Ignore storage errors.
+  }
+  return defaultAudienceTarget;
 }
