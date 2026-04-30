@@ -4,7 +4,7 @@ Live Translation App is a web-based captioning experience for presenters and aud
 
 ## Current Scope
 
-This repository currently includes the Phase 1 scaffold, Phase 2 local Speech translation, and Phase 3 local room broadcasting:
+This repository currently includes the Phase 1 scaffold, Phase 2 local Speech translation, Phase 3 local room broadcasting, and Phase 4 UX polish:
 
 - React + TypeScript + Vite frontend in `client/`
 - Node.js + Express + TypeScript backend in `server/`
@@ -12,6 +12,7 @@ This repository currently includes the Phase 1 scaffold, Phase 2 local Speech tr
 - Browser microphone translation for French to Dutch and Spanish to French
 - Local Socket.IO caption relay with room codes
 - Speaker and audience views for testing live subtitles in separate browser tabs
+- Polished session controls, generated/copyable room codes, status indicators, clear actions, and mobile-friendly subtitles
 - Backend Dockerfile and local `docker-compose.yml`
 - PowerShell Azure CLI provisioning script in `scripts/setup-azure.ps1`
 - Public-repo-safe `.env.example` files with placeholders only
@@ -110,6 +111,17 @@ Open two browser tabs at `http://localhost:5173`:
 
 The local relay is intended for development and single-machine testing. Azure SignalR Service is still the planned cloud-scale realtime service for later phases.
 
+## Phase 4 UX Polish
+
+The app now has focused speaker and audience controls:
+
+- Generated room codes with copy and regenerate actions
+- Separate status indicators for microphone/Speech, realtime relay, audience connection, and connected clients
+- Clear actions for speaker transcripts and audience captions
+- Larger audience subtitle display with original source text in caption history
+- Auto-scrolling recent caption history for audience devices
+- Responsive controls for phone-sized audience screens
+
 ## Azure Resource Setup
 
 Use one Azure resource group per app environment, for example `rg-live-translation-dev`, `rg-live-translation-test`, and `rg-live-translation-prod`. Keep all resources for that environment in its matching resource group so cleanup, RBAC, deployment scope, and cost review stay straightforward.
@@ -180,4 +192,4 @@ live-translation-app/
 
 ## Next Phases
 
-Phase 4 will polish the speaker and audience UX. Phase 5 will add production deployment with managed identity for the backend container and cloud-scale realtime broadcasting.
+Phase 5 will add production deployment with managed identity for the backend container and cloud-scale realtime broadcasting.

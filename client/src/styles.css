@@ -152,6 +152,33 @@ h1 {
   background: #ffffff;
 }
 
+.inline-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px;
+  gap: 8px;
+}
+
+.inline-field button,
+.secondary-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #bdc8d6;
+  border-radius: 8px;
+  color: #263244;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.inline-field button:disabled,
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .room-input input {
   text-transform: uppercase;
 }
@@ -190,6 +217,10 @@ h1 {
   opacity: 0.72;
 }
 
+.compact-action {
+  padding: 0 14px;
+}
+
 .status-pill {
   border: 1px solid #bdc8d6;
   color: #4a5668;
@@ -200,6 +231,19 @@ h1 {
   border-color: #5b8c00;
   color: #315300;
   background: #f2f8e8;
+}
+
+.status-pill[data-state="warning"] {
+  border-color: #d99628;
+  color: #7c4a03;
+  background: #fff8e8;
+}
+
+.status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 .room-strip {
@@ -226,6 +270,25 @@ h1 {
   padding: 12px 14px;
   color: #8a1f1f;
   background: #fff4f4;
+}
+
+.message-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.message-stack .error-banner,
+.message-stack .notice-banner {
+  margin: 0;
+}
+
+.notice-banner {
+  border: 1px solid #9bc5b8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #0b5f59;
+  background: #f0fbf8;
 }
 
 .transcript-grid {
@@ -277,24 +340,38 @@ h1 {
   margin-top: 24px;
 }
 
-.subtitle-text {
+.subtitle-card {
   min-height: 280px;
   display: grid;
   place-items: center;
-  margin: 0;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   padding: 28px;
-  color: #18212f;
   background: #f7fbf7;
+}
+
+.subtitle-text {
+  margin: 0;
+  color: #18212f;
   font-size: clamp(1.8rem, 5vw, 3.4rem);
   line-height: 1.2;
+  text-align: center;
+}
+
+.source-text {
+  margin: 14px 0 0;
+  color: #566276;
+  font-size: 1rem;
+  line-height: 1.45;
   text-align: center;
 }
 
 .caption-history {
   display: grid;
   gap: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .caption-history article {
@@ -317,6 +394,13 @@ h1 {
   margin: 0;
   color: #263244;
   line-height: 1.5;
+}
+
+.caption-history small {
+  display: block;
+  margin-top: 6px;
+  color: #66758a;
+  line-height: 1.4;
 }
 
 .config-panel {
@@ -375,6 +459,7 @@ dd {
   }
 
   .primary-action,
+  .secondary-action,
   .status-pill {
     justify-content: center;
     width: 100%;

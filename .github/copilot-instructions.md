@@ -140,6 +140,12 @@ Phase 3 implementation notes:
 - Auto-scroll and subtitle styling for audience view
 - Mobile-responsive design for audience (phone use case)
 
+Phase 4 implementation notes:
+- Split the client UI into focused components under `client/src/components/` for speaker, audience, session controls, status badges, and view switching.
+- Room codes should be generated, normalized, and copyable from the UI.
+- Speaker mode should surface microphone/Speech status, realtime relay status, and connected audience count.
+- Audience mode should use an accessible live subtitle region, show source text context where useful, and auto-scroll recent caption history.
+
 ### Phase 5: Azure Deployment
 - Create Azure Container Registry (ACR) in the same environment resource group and build/push backend Docker image
 - Create Azure Container Apps Environment in the same environment resource group and deploy backend container
@@ -162,7 +168,7 @@ live-translation-app/
 │   │   │   └── AudienceView.tsx   # Audience's interface
 │   │   ├── services/
 │   │   │   ├── speechTranslation.ts  # Azure Speech SDK wrapper
-│   │   │   └── signalr.ts           # SignalR client connection
+│   │   │   └── realtime.ts           # Socket.IO local realtime client
 │   │   ├── App.tsx
 │   │   └── main.tsx
 │   ├── package.json
@@ -171,7 +177,7 @@ live-translation-app/
 │   ├── src/
 │   │   ├── index.ts
 │   │   ├── auth.ts            # Token broker (DefaultAzureCredential)
-│   │   ├── signalr.ts         # SignalR hub logic
+│   │   ├── realtime.ts        # Local Socket.IO room relay
 │   │   └── routes/
 │   ├── Dockerfile             # Multi-stage Docker build
 │   ├── .dockerignore

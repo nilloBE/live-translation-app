@@ -1,5 +1,9 @@
-import { Captions, Languages, Mic, MicOff, Radio, Send, Square, Users } from "lucide-react";
+import { Languages, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AudienceView } from "./components/AudienceView";
+import { SessionControls } from "./components/SessionControls";
+import { SpeakerView } from "./components/SpeakerView";
+import { ViewSwitch, type AppView } from "./components/ViewSwitch";
 import {
   createRealtimeConnection,
   normalizeRoomId,
@@ -14,27 +18,28 @@ import {
 } from "./services/speechTranslation";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
-type AppView = "speaker" | "audience";
 
 export function App() {
   const [activeView, setActiveView] = useState<AppView>("speaker");
-  const [roomInput, setRoomInput] = useState("LIVE");
+  const [roomInput, setRoomInput] = useState(() => generateRoomCode());
   const [selectedPairId, setSelectedPairId] = useState<TranslationPairId>("fr-nl");
   const [isListening, setIsListening] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
-  const [status, setStatus] = useState("Ready");
+  const [speechStatus, setSpeechStatus] = useState("Ready");
+  const [relayStatus, setRelayStatus] = useState("Relay idle");
   const [audienceStatus, setAudienceStatus] = useState("Disconnected");
   const [audienceCount, setAudienceCount] = useState(0);
   const [captions, setCaptions] = useState<CaptionMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [originalText, setOriginalText] = useState("");
   const [translatedText, setTranslatedText] = useState("");
   const sessionRef = useRef<RunningTranslationSession | null>(null);
   const speakerSocketRef = useRef<RealtimeConnection | null>(null);
   const audienceSocketRef = useRef<RealtimeConnection | null>(null);
+  const speakerRoomRef = useRef<string | null>(null);
 
   const roomId = useMemo(() => normalizeRoomId(roomInput), [roomInput]);
-
   const selectedPair = useMemo(
     () => translationPairs.find((pair) => pair.id === selectedPairId) ?? translationPairs[0],
     [selectedPairId],
@@ -65,6 +70,10 @@ export function App() {
       });
     });
 
+    socket.on("disconnect", () => {
+      setAudienceStatus("Disconnected");
+    });
+
     socket.on("connect_error", () => {
       setAudienceStatus("Connection failed");
     });
@@ -76,7 +85,7 @@ export function App() {
     });
 
     socket.on("caption", (caption) => {
-      setCaptions((currentCaptions) => [caption, ...currentCaptions].slice(0, 8));
+      setCaptions((currentCaptions) => [...currentCaptions, caption].slice(-10));
     });
 
     socket.connect();
@@ -96,16 +105,18 @@ export function App() {
 
     setIsBusy(true);
     setError(null);
-    setStatus("Connecting");
+    setNotice(null);
+    setSpeechStatus("Connecting microphone");
+    connectSpeakerRelay();
 
     try {
       sessionRef.current = await startTranslationSession({
         apiBaseUrl,
         pair: selectedPair,
-        onStatus: setStatus,
+        onStatus: setSpeechStatus,
         onError: (message) => {
           setError(message);
-          setStatus("Needs attention");
+          setSpeechStatus("Needs attention");
         },
         onUpdate: (update) => {
           if (update.originalText) {
@@ -130,7 +141,7 @@ export function App() {
       setIsListening(true);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to start translation.");
-      setStatus("Needs attention");
+      setSpeechStatus("Needs attention");
     } finally {
       setIsBusy(false);
     }
@@ -142,7 +153,7 @@ export function App() {
     }
 
     setIsBusy(true);
-    setStatus("Stopping");
+    setSpeechStatus("Stopping");
     setError(null);
 
     try {
@@ -153,8 +164,22 @@ export function App() {
       sessionRef.current = null;
       setIsListening(false);
       setIsBusy(false);
-      setStatus("Ready");
+      setSpeechStatus("Ready");
     }
+  }
+
+  function connectSpeakerRelay() {
+    const socket = getSpeakerSocket();
+
+    if (speakerRoomRef.current && speakerRoomRef.current !== roomId) {
+      socket.emit("leave-room", speakerRoomRef.current);
+    }
+
+    speakerRoomRef.current = roomId;
+    socket.emit("join-room", roomId, (presence) => {
+      setAudienceCount(presence.audienceCount);
+      setRelayStatus("Relay connected");
+    });
   }
 
   function publishCaption(caption: CaptionMessage) {
@@ -169,17 +194,59 @@ export function App() {
   function getSpeakerSocket() {
     if (!speakerSocketRef.current) {
       speakerSocketRef.current = createRealtimeConnection(apiBaseUrl);
+      speakerSocketRef.current.on("connect", () => setRelayStatus("Relay connected"));
+      speakerSocketRef.current.on("disconnect", () => setRelayStatus("Relay disconnected"));
       speakerSocketRef.current.on("connect_error", () => {
+        setRelayStatus("Relay failed");
         setError("Unable to connect to the realtime caption relay.");
+      });
+      speakerSocketRef.current.on("room-presence", (presence) => {
+        if (presence.roomId === roomId) {
+          setAudienceCount(presence.audienceCount);
+        }
       });
     }
 
     if (!speakerSocketRef.current.connected) {
+      setRelayStatus("Relay connecting");
       speakerSocketRef.current.connect();
     }
 
     return speakerSocketRef.current;
   }
+
+  function handleRoomInputChange(roomCode: string) {
+    setRoomInput(normalizeRoomId(roomCode));
+    setNotice(null);
+  }
+
+  function handleGenerateRoom() {
+    setRoomInput(generateRoomCode());
+    setNotice("Room code generated");
+  }
+
+  async function handleCopyRoom() {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      setNotice("Room code copied");
+    } catch {
+      setError("Unable to copy the room code from this browser.");
+    }
+  }
+
+  function clearSpeakerTranscript() {
+    setOriginalText("");
+    setTranslatedText("");
+    setNotice("Speaker transcript cleared");
+  }
+
+  function clearAudienceCaptions() {
+    setCaptions([]);
+    setNotice("Audience captions cleared");
+  }
+
+  const activeEyebrow = activeView === "speaker" ? "Speaker console" : "Audience subtitles";
+  const controlsLocked = isListening || isBusy;
 
   return (
     <main className="app-shell">
@@ -189,120 +256,58 @@ export function App() {
             <Languages size={28} />
           </span>
           <div>
-            <p className="eyebrow">Speaker console</p>
+            <p className="eyebrow">{activeEyebrow}</p>
             <h1 id="app-title">Live Translation App</h1>
           </div>
         </div>
 
-        <div className="view-switch" aria-label="Live translation views">
-          <button
-            type="button"
-            data-active={activeView === "speaker"}
-            onClick={() => setActiveView("speaker")}
-          >
-            <Mic size={18} aria-hidden="true" />
-            Speaker
-          </button>
-          <button
-            type="button"
-            data-active={activeView === "audience"}
-            onClick={() => setActiveView("audience")}
-          >
-            <Users size={18} aria-hidden="true" />
-            Audience
-          </button>
-        </div>
+        <ViewSwitch activeView={activeView} onChange={setActiveView} />
 
-        <div className="control-bar" aria-label="Session controls">
-          <label className="room-input">
-            <span>Room code</span>
-            <input
-              value={roomInput}
-              onChange={(event) => setRoomInput(event.target.value)}
-              disabled={isListening}
-              maxLength={16}
-            />
-          </label>
-
-          <label className="pair-select">
-            <span>Translation pair</span>
-            <select
-              value={selectedPairId}
-              onChange={(event) => setSelectedPairId(event.target.value as TranslationPairId)}
-              disabled={isListening || isBusy}
-            >
-              {translationPairs.map((pair) => (
-                <option key={pair.id} value={pair.id}>
-                  {pair.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {activeView === "speaker" ? (
-            <div className="action-row">
-              <button
-                className="primary-action"
-                type="button"
-                onClick={isListening ? stopListening : startListening}
-                disabled={isBusy}
-                aria-label={isListening ? "Stop translation" : "Start translation"}
-              >
-                {isListening ? <Square size={20} aria-hidden="true" /> : <Mic size={20} aria-hidden="true" />}
-                <span>{isListening ? "Stop" : "Start"}</span>
-              </button>
-              <span className="status-pill" data-state={isListening ? "active" : "idle"}>
-                {isListening ? <Radio size={16} aria-hidden="true" /> : <MicOff size={16} aria-hidden="true" />}
-                {status}
-              </span>
-            </div>
-          ) : (
-            <span className="status-pill" data-state={audienceStatus.startsWith("Joined") ? "active" : "idle"}>
-              <Captions size={16} aria-hidden="true" />
-              {audienceStatus}
-            </span>
-          )}
-        </div>
+        <SessionControls
+          roomInput={roomInput}
+          selectedPairId={selectedPairId}
+          isLocked={controlsLocked}
+          onRoomInputChange={handleRoomInputChange}
+          onGenerateRoom={handleGenerateRoom}
+          onCopyRoom={handleCopyRoom}
+          onPairChange={setSelectedPairId}
+        >
+          {activeView === "speaker" ? null : <span className="audience-room-spacer" aria-hidden="true" />}
+        </SessionControls>
 
         <div className="room-strip" aria-label="Current room">
           <Send size={16} aria-hidden="true" />
           <span>{activeView === "speaker" ? "Broadcasting to" : "Watching"}</span>
           <code>{roomId}</code>
-          {activeView === "audience" ? <span>{audienceCount} connected</span> : null}
+          <span>{audienceCount} connected</span>
         </div>
 
-        {error ? <p className="error-banner">{error}</p> : null}
+        <div className="message-stack" aria-live="polite">
+          {notice ? <p className="notice-banner">{notice}</p> : null}
+          {error ? <p className="error-banner">{error}</p> : null}
+        </div>
 
         {activeView === "speaker" ? (
-          <section className="transcript-grid" aria-label="Live translation transcript">
-            <article className="transcript-panel">
-              <div className="transcript-heading">
-                <span>{selectedPair.sourceName}</span>
-                <code>{selectedPair.sourceLanguage}</code>
-              </div>
-              <p>{originalText || "Waiting for speech"}</p>
-            </article>
-
-            <article className="transcript-panel translated-panel">
-              <div className="transcript-heading">
-                <span>{selectedPair.targetName}</span>
-                <code>{selectedPair.targetLanguage}</code>
-              </div>
-              <p>{translatedText || "Waiting for translation"}</p>
-            </article>
-          </section>
+          <SpeakerView
+            selectedPair={selectedPair}
+            originalText={originalText}
+            translatedText={translatedText}
+            isListening={isListening}
+            isBusy={isBusy}
+            speechStatus={speechStatus}
+            relayStatus={relayStatus}
+            audienceCount={audienceCount}
+            onStart={startListening}
+            onStop={stopListening}
+            onClear={clearSpeakerTranscript}
+          />
         ) : (
-          <section className="audience-stage" aria-label="Audience captions">
-            <p className="subtitle-text">{captions[0]?.translatedText || "Waiting for live captions"}</p>
-            <div className="caption-history" aria-label="Recent captions">
-              {captions.map((caption) => (
-                <article key={`${caption.timestamp}-${caption.translatedText}`}>
-                  <span>{caption.isFinal ? "Final" : "Live"}</span>
-                  <p>{caption.translatedText}</p>
-                </article>
-              ))}
-            </div>
-          </section>
+          <AudienceView
+            captions={captions}
+            audienceStatus={audienceStatus}
+            audienceCount={audienceCount}
+            onClear={clearAudienceCaptions}
+          />
         )}
       </section>
 
@@ -329,4 +334,10 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function generateRoomCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const randomPart = Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  return `LIVE-${randomPart}`;
 }
