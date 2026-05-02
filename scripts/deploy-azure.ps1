@@ -1,0 +1,403 @@
+<#
+.SYNOPSIS
+    Deploys the Live Translation App to Azure Container Apps and Static Web Apps.
+    All resources are provisioned under a single resource group.
+    Authentication uses Microsoft Entra ID exclusively — no API keys.
+
+.DESCRIPTION
+    This script:
+    1. Creates the resource group (if missing)
+    2. Provisions Azure AI Speech, Azure SignalR, Container Registry, Container Apps Environment, and Static Web App
+    3. Builds and pushes the backend Docker image to ACR
+    4. Creates or updates the Container App with system-assigned Managed Identity
+    5. Assigns RBAC roles (Cognitive Services Speech User, SignalR App Server) to the Container App identity
+    6. Builds and deploys the frontend apps to Azure Static Web Apps
+    7. Prints the deployment URLs
+
+.PARAMETER Location
+    Azure region for all resources. Default: westeurope
+
+.PARAMETER ResourceGroup
+    Name of the Azure resource group. Default: rg-live-translation-dev
+
+.PARAMETER SpeechResourceName
+    Name of the Azure AI Speech resource. Default: speech-live-translation-dev
+
+.PARAMETER SignalRResourceName
+    Name of the Azure SignalR resource. Default: signalr-live-translation-dev
+
+.PARAMETER ContainerRegistryName
+    Name of the Azure Container Registry. Default: acrlivetranslationdev
+
+.PARAMETER ContainerAppEnvironmentName
+    Name of the Container Apps Environment. Default: env-live-translation-dev
+
+.PARAMETER ContainerAppName
+    Name of the Container App for the backend. Default: api-live-translation-dev
+
+.PARAMETER StaticWebAppName
+    Name of the Azure Static Web App. Default: web-live-translation-dev
+
+.EXAMPLE
+    .\scripts\deploy-azure.ps1
+    .\scripts\deploy-azure.ps1 -Location "northeurope" -ResourceGroup "rg-live-translation-prod"
+#>
+[CmdletBinding()]
+param(
+    [string]$Location,
+    [string]$ResourceGroup,
+    [string]$SpeechResourceName,
+    [string]$SpeechCustomDomain,
+    [string]$SignalRResourceName,
+    [string]$ContainerRegistryName,
+    [string]$ContainerAppEnvironmentName,
+    [string]$ContainerAppName,
+    [string]$StaticWebAppName
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+function Get-Setting {
+    param(
+        [string]$ProvidedValue,
+        [string]$EnvironmentVariableName,
+        [string]$DefaultValue
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ProvidedValue)) { return $ProvidedValue }
+    $envValue = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    if (-not [string]::IsNullOrWhiteSpace($envValue)) { return $envValue }
+    return $DefaultValue
+}
+
+function Invoke-Az {
+    param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Arguments)
+    & az @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "Azure CLI command failed: az $($Arguments -join ' ')" }
+}
+
+function Invoke-AzText {
+    param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Arguments)
+    $output = & az @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "Azure CLI command failed: az $($Arguments -join ' ')" }
+    return ($output | Out-String).Trim()
+}
+
+function Test-AzResource {
+    param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Arguments)
+    $allArgs = $Arguments + @("--output", "none")
+    & az @allArgs 2>$null
+    return $LASTEXITCODE -eq 0
+}
+
+function Set-RoleAssignmentIfMissing {
+    param(
+        [string]$AssigneeObjectId,
+        [string]$RoleName,
+        [string]$Scope
+    )
+    $existing = Invoke-AzText role assignment list `
+        --assignee $AssigneeObjectId `
+        --role $RoleName `
+        --scope $Scope `
+        --query "[0].id" `
+        --output tsv
+    if (-not [string]::IsNullOrWhiteSpace($existing)) {
+        Write-Host "  Role '$RoleName' already assigned."
+        return
+    }
+    Write-Host "  Assigning role '$RoleName'..."
+    Invoke-Az role assignment create `
+        --assignee-object-id $AssigneeObjectId `
+        --assignee-principal-type ServicePrincipal `
+        --role $RoleName `
+        --scope $Scope `
+        --output none
+}
+
+# ---------------------------------------------------------------------------
+# Prerequisites check
+# ---------------------------------------------------------------------------
+if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+    throw "Azure CLI is required. Install from https://learn.microsoft.com/cli/azure/install-azure-cli then run 'az login'."
+}
+
+# ---------------------------------------------------------------------------
+# Resolve parameters
+# ---------------------------------------------------------------------------
+$Location = Get-Setting $Location "AZURE_LOCATION" "westeurope"
+$ResourceGroup = Get-Setting $ResourceGroup "AZURE_RESOURCE_GROUP" "rg-live-translation-dev"
+$SpeechResourceName = Get-Setting $SpeechResourceName "SPEECH_RESOURCE_NAME" "speech-live-translation-dev"
+$SpeechCustomDomain = Get-Setting $SpeechCustomDomain "SPEECH_CUSTOM_DOMAIN" $SpeechResourceName
+$SignalRResourceName = Get-Setting $SignalRResourceName "SIGNALR_RESOURCE_NAME" "signalr-live-translation-dev"
+$ContainerRegistryName = Get-Setting $ContainerRegistryName "ACR_NAME" "acrlivetranslationdev"
+$ContainerAppEnvironmentName = Get-Setting $ContainerAppEnvironmentName "CONTAINER_APP_ENV_NAME" "env-live-translation-dev"
+$ContainerAppName = Get-Setting $ContainerAppName "CONTAINER_APP_NAME" "api-live-translation-dev"
+$StaticWebAppName = Get-Setting $StaticWebAppName "STATIC_WEB_APP_NAME" "web-live-translation-dev"
+
+$ImageName = "live-translation-api"
+$ImageTag = "latest"
+$FullImageName = "$ContainerRegistryName.azurecr.io/${ImageName}:${ImageTag}"
+
+Write-Host "========================================"
+Write-Host " Live Translation App - Azure Deployment"
+Write-Host "========================================"
+Write-Host ""
+Write-Host "Subscription:"
+Invoke-Az account show --query "{name:name, id:id}" --output table
+Write-Host ""
+Write-Host "Configuration:"
+Write-Host "  Location:             $Location"
+Write-Host "  Resource Group:       $ResourceGroup"
+Write-Host "  Speech Resource:      $SpeechResourceName"
+Write-Host "  SignalR Resource:     $SignalRResourceName"
+Write-Host "  Container Registry:   $ContainerRegistryName"
+Write-Host "  Container App Env:    $ContainerAppEnvironmentName"
+Write-Host "  Container App:        $ContainerAppName"
+Write-Host "  Static Web App:       $StaticWebAppName"
+Write-Host ""
+
+# ===========================================================================
+# Step 1: Resource Group
+# ===========================================================================
+Write-Host "[1/9] Creating resource group..."
+Invoke-Az group create --name $ResourceGroup --location $Location --output none
+
+# ===========================================================================
+# Step 2: Azure AI Speech (with custom subdomain for Entra ID token exchange)
+# ===========================================================================
+Write-Host "[2/9] Provisioning Azure AI Speech resource..."
+if (Test-AzResource cognitiveservices account show --name $SpeechResourceName --resource-group $ResourceGroup) {
+    Write-Host "  Already exists: $SpeechResourceName"
+} else {
+    Invoke-Az cognitiveservices account create `
+        --name $SpeechResourceName `
+        --resource-group $ResourceGroup `
+        --kind SpeechServices `
+        --sku F0 `
+        --location $Location `
+        --custom-domain $SpeechCustomDomain `
+        --yes `
+        --output none
+}
+
+$speechResourceId = Invoke-AzText cognitiveservices account show `
+    --name $SpeechResourceName `
+    --resource-group $ResourceGroup `
+    --query id --output tsv
+
+# ===========================================================================
+# Step 3: Azure SignalR Service
+# ===========================================================================
+Write-Host "[3/9] Provisioning Azure SignalR Service..."
+if (Test-AzResource signalr show --name $SignalRResourceName --resource-group $ResourceGroup) {
+    Write-Host "  Already exists: $SignalRResourceName"
+} else {
+    Invoke-Az signalr create `
+        --name $SignalRResourceName `
+        --resource-group $ResourceGroup `
+        --sku Free_F1 `
+        --service-mode Default `
+        --location $Location `
+        --output none
+}
+
+$signalrResourceId = Invoke-AzText signalr show `
+    --name $SignalRResourceName `
+    --resource-group $ResourceGroup `
+    --query id --output tsv
+
+# ===========================================================================
+# Step 4: Azure Container Registry
+# ===========================================================================
+Write-Host "[4/9] Provisioning Azure Container Registry..."
+if (Test-AzResource acr show --name $ContainerRegistryName --resource-group $ResourceGroup) {
+    Write-Host "  Already exists: $ContainerRegistryName"
+} else {
+    Invoke-Az acr create `
+        --name $ContainerRegistryName `
+        --resource-group $ResourceGroup `
+        --sku Basic `
+        --admin-enabled false `
+        --output none
+}
+
+$acrResourceId = Invoke-AzText acr show `
+    --name $ContainerRegistryName `
+    --resource-group $ResourceGroup `
+    --query id --output tsv
+
+# ===========================================================================
+# Step 5: Build & Push Docker Image (using ACR Tasks — no local Docker needed)
+# ===========================================================================
+Write-Host "[5/9] Building and pushing Docker image to ACR..."
+Invoke-Az acr build `
+    --registry $ContainerRegistryName `
+    --image "${ImageName}:${ImageTag}" `
+    --file server/Dockerfile `
+    server/
+
+# ===========================================================================
+# Step 6: Container Apps Environment
+# ===========================================================================
+Write-Host "[6/9] Provisioning Container Apps Environment..."
+if (Test-AzResource containerapp env show --name $ContainerAppEnvironmentName --resource-group $ResourceGroup) {
+    Write-Host "  Already exists: $ContainerAppEnvironmentName"
+} else {
+    Invoke-Az containerapp env create `
+        --name $ContainerAppEnvironmentName `
+        --resource-group $ResourceGroup `
+        --location $Location `
+        --output none
+}
+
+# ===========================================================================
+# Step 7: Container App (with system-assigned Managed Identity)
+# ===========================================================================
+Write-Host "[7/9] Deploying Container App..."
+
+# Get the Static Web App URL for CORS (if it exists already)
+$swaHostname = ""
+if (Test-AzResource staticwebapp show --name $StaticWebAppName --resource-group $ResourceGroup) {
+    $swaHostname = Invoke-AzText staticwebapp show `
+        --name $StaticWebAppName `
+        --resource-group $ResourceGroup `
+        --query "defaultHostname" --output tsv
+}
+
+$corsOrigins = "https://$swaHostname"
+if ([string]::IsNullOrWhiteSpace($swaHostname)) {
+    $corsOrigins = "*"
+}
+
+if (Test-AzResource containerapp show --name $ContainerAppName --resource-group $ResourceGroup) {
+    Write-Host "  Updating existing Container App..."
+    Invoke-Az containerapp update `
+        --name $ContainerAppName `
+        --resource-group $ResourceGroup `
+        --image $FullImageName `
+        --set-env-vars `
+            "NODE_ENV=production" `
+            "PORT=3001" `
+            "SPEECH_REGION=$Location" `
+            "SPEECH_ENDPOINT=https://$SpeechCustomDomain.cognitiveservices.azure.com" `
+            "CORS_ORIGIN=$corsOrigins" `
+        --output none
+} else {
+    Write-Host "  Creating new Container App..."
+    Invoke-Az containerapp create `
+        --name $ContainerAppName `
+        --resource-group $ResourceGroup `
+        --environment $ContainerAppEnvironmentName `
+        --image $FullImageName `
+        --registry-server "$ContainerRegistryName.azurecr.io" `
+        --registry-identity system `
+        --target-port 3001 `
+        --ingress external `
+        --system-assigned `
+        --env-vars `
+            "NODE_ENV=production" `
+            "PORT=3001" `
+            "SPEECH_REGION=$Location" `
+            "SPEECH_ENDPOINT=https://$SpeechCustomDomain.cognitiveservices.azure.com" `
+            "CORS_ORIGIN=$corsOrigins" `
+        --min-replicas 0 `
+        --max-replicas 2 `
+        --output none
+}
+
+# Ensure system identity is enabled
+Invoke-Az containerapp identity assign `
+    --name $ContainerAppName `
+    --resource-group $ResourceGroup `
+    --system-assigned `
+    --output none
+
+$appIdentityPrincipalId = Invoke-AzText containerapp identity show `
+    --name $ContainerAppName `
+    --resource-group $ResourceGroup `
+    --query "principalId" --output tsv
+
+# ===========================================================================
+# Step 8: RBAC Role Assignments for Container App Managed Identity
+# ===========================================================================
+Write-Host "[8/9] Assigning RBAC roles to Container App identity..."
+
+# Speech User role — allows requesting authorization tokens
+Set-RoleAssignmentIfMissing `
+    -AssigneeObjectId $appIdentityPrincipalId `
+    -RoleName "Cognitive Services Speech User" `
+    -Scope $speechResourceId
+
+# ACR Pull — allows pulling images from the container registry
+Set-RoleAssignmentIfMissing `
+    -AssigneeObjectId $appIdentityPrincipalId `
+    -RoleName "AcrPull" `
+    -Scope $acrResourceId
+
+# SignalR App Server — allows the backend to use SignalR in the future
+Set-RoleAssignmentIfMissing `
+    -AssigneeObjectId $appIdentityPrincipalId `
+    -RoleName "SignalR App Server" `
+    -Scope $signalrResourceId
+
+# ===========================================================================
+# Step 9: Static Web App (frontend)
+# ===========================================================================
+Write-Host "[9/9] Provisioning Static Web App..."
+if (Test-AzResource staticwebapp show --name $StaticWebAppName --resource-group $ResourceGroup) {
+    Write-Host "  Already exists: $StaticWebAppName"
+} else {
+    Invoke-Az staticwebapp create `
+        --name $StaticWebAppName `
+        --resource-group $ResourceGroup `
+        --location $Location `
+        --output none
+}
+
+# Get Container App FQDN for frontend configuration
+$containerAppFqdn = Invoke-AzText containerapp show `
+    --name $ContainerAppName `
+    --resource-group $ResourceGroup `
+    --query "properties.configuration.ingress.fqdn" --output tsv
+
+$swaHostname = Invoke-AzText staticwebapp show `
+    --name $StaticWebAppName `
+    --resource-group $ResourceGroup `
+    --query "defaultHostname" --output tsv
+
+# Update CORS now that we have the SWA URL
+Write-Host "  Updating Container App CORS with SWA hostname..."
+Invoke-Az containerapp update `
+    --name $ContainerAppName `
+    --resource-group $ResourceGroup `
+    --set-env-vars "CORS_ORIGIN=https://$swaHostname" `
+    --output none
+
+# ===========================================================================
+# Summary
+# ===========================================================================
+Write-Host ""
+Write-Host "========================================"
+Write-Host " Deployment Complete!"
+Write-Host "========================================"
+Write-Host ""
+Write-Host "Backend API:  https://$containerAppFqdn"
+Write-Host "Health check: https://$containerAppFqdn/health"
+Write-Host ""
+Write-Host "Static Web App: https://$swaHostname"
+Write-Host ""
+Write-Host "To deploy the frontend, build the client apps with:"
+Write-Host "  VITE_API_BASE_URL=https://$containerAppFqdn npm run build:speaker"
+Write-Host "  VITE_API_BASE_URL=https://$containerAppFqdn npm run build:audience"
+Write-Host ""
+Write-Host "Then deploy using the SWA CLI:"
+Write-Host "  npx @azure/static-web-apps-cli deploy ./client-speaker/dist --env production"
+Write-Host ""
+Write-Host "Or use 'az staticwebapp deploy' with the deployment token:"
+Write-Host "  az staticwebapp secrets list --name $StaticWebAppName --resource-group $ResourceGroup"
+Write-Host ""
+Write-Host "No API keys or secrets were used. All auth is via Microsoft Entra ID."

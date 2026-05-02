@@ -209,7 +209,8 @@ live-translation-app/
 ├── docker-compose.yml         # Local dev: backend + client together
 ├── scripts/
 │   ├── setup-azure.ps1        # Azure CLI provisioning + RBAC for Windows dev
-│   └── deploy.ps1             # Build, push to ACR, deploy to Container Apps
+│   ├── deploy-azure.ps1       # Full deployment: provision + build + deploy to Container Apps
+│   └── cleanup-azure.ps1      # Delete all Azure resources (resource group)
 ├── .github/
 │   └── copilot-instructions.md  # This file
 ├── .gitignore                 # Comprehensive ignore rules
@@ -245,6 +246,22 @@ If the subscription cannot create another free `F0` Speech resource, use an exis
 ```
 
 Full mode also creates or reuses Azure SignalR Service, Azure Container Registry, Azure Container Apps environment, and Azure Static Web App in the same dev resource group. Container image build/push and Container App deployment identity role assignments should be handled by the later deployment script/IaC work in Phase 5.
+
+### Full deployment (Phase 5)
+
+```powershell
+.\scripts\deploy-azure.ps1
+```
+
+This single script provisions all resources, builds the Docker image in ACR, deploys the Container App with Managed Identity, assigns all RBAC roles, and creates the Static Web App. No API keys are used at any point. After the backend is deployed, build the frontend clients with `VITE_API_BASE_URL` set to the Container App FQDN and deploy to the Static Web App.
+
+### Cleanup (delete everything)
+
+```powershell
+.\scripts\cleanup-azure.ps1
+```
+
+Deletes the entire resource group and all resources in it. Requires confirmation (type the resource group name) unless `-Force` is passed.
 
 ## Technical Notes
 

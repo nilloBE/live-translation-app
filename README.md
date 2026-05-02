@@ -216,8 +216,11 @@ live-translation-app/
 ├── client-speaker/            # Speaker React app with microphone translation
 ├── client-audience/           # Audience React app with localized caption viewer
 ├── shared/                    # Shared caption protocol, language catalog, realtime client
-├── server/                    # Express backend
-├── scripts/setup-azure.ps1    # Azure provisioning script
+├── server/                    # Express backend (Dockerized)
+├── scripts/
+│   ├── setup-azure.ps1        # Azure provisioning (Phase 2 / Full mode)
+│   ├── deploy-azure.ps1       # Full deployment to Azure Container Apps
+│   └── cleanup-azure.ps1      # Delete all resources (resource group)
 ├── docker-compose.yml         # Local containers
 ├── .env.example               # Shared Azure resource placeholders
 └── README.md
@@ -225,4 +228,63 @@ live-translation-app/
 
 ## Next Phases
 
-Phase 5 will add production deployment with managed identity for the backend container and cloud-scale realtime broadcasting.
+Phase 5 deployment scripts are available for deploying the full stack to Azure. See the Azure Deployment section below.
+
+## Azure Deployment (Phase 5)
+
+Deploy the full application to Azure using the deployment script. This provisions all resources under a single resource group and uses Managed Identity exclusively — no API keys.
+
+### Prerequisites for Deployment
+
+- All [local prerequisites](#prerequisites) above
+- Azure CLI logged in with an account that can create resources and assign RBAC roles
+- The Azure subscription must allow creating Container Apps, ACR, Speech, SignalR, and Static Web Apps
+
+### Deploy
+
+```powershell
+.\scripts\deploy-azure.ps1
+```
+
+This script:
+1. Creates/reuses the resource group
+2. Provisions Azure AI Speech (F0), SignalR (Free), Container Registry (Basic), Container Apps Environment, and Static Web App
+3. Builds the backend Docker image using ACR Tasks (no local Docker required)
+4. Deploys the Container App with system-assigned Managed Identity
+5. Assigns RBAC roles: `Cognitive Services Speech User`, `AcrPull`, `SignalR App Server`
+6. Outputs the backend URL and Static Web App URL
+
+After the script completes, deploy the frontend:
+
+```powershell
+# Build both client apps pointing to the deployed backend
+$env:VITE_API_BASE_URL = "https://<your-container-app-fqdn>"
+npm run build:speaker
+npm run build:audience
+
+# Deploy using SWA CLI (install once: npm install -g @azure/static-web-apps-cli)
+swa deploy ./client-speaker/dist --env production --app-name web-live-translation-dev
+```
+
+You can override defaults with parameters or environment variables:
+
+```powershell
+.\scripts\deploy-azure.ps1 `
+    -Location westeurope `
+    -ResourceGroup rg-live-translation-prod `
+    -ContainerAppName api-live-translation-prod
+```
+
+### Cleanup
+
+To permanently delete all Azure resources (resource group and everything in it):
+
+```powershell
+.\scripts\cleanup-azure.ps1
+```
+
+This deletes the entire resource group. You will be asked to confirm by typing the resource group name. Use `-Force` to skip confirmation:
+
+```powershell
+.\scripts\cleanup-azure.ps1 -Force
+```
