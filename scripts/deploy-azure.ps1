@@ -388,15 +388,12 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Write-Host "  Installing npm dependencies..."
 Push-Location $repoRoot
 try {
-    & npm ci --ignore-scripts 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & npm install 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
-    }
+    & npm install
+    if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
 
     # Build shared package first (workspace dependency)
     Write-Host "  Building shared package..."
-    & npm run build --workspace @live-translation/shared --if-present 2>&1 | Out-Null
+    & npm run build --workspace @live-translation/shared --if-present
 
     # Build speaker and audience apps with production API URL
     $env:VITE_API_BASE_URL = "https://$containerAppFqdn"
