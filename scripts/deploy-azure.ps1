@@ -118,10 +118,20 @@ function Set-RoleAssignmentIfMissing {
         --output none
 }
 
-# On Windows, npm and npx are .cmd files. Resolve them explicitly to avoid
-# PowerShell's & operator misresolving the command.
-$npmCmd = (Get-Command npm -ErrorAction SilentlyContinue)?.Source ?? "npm"
-$npxCmd = (Get-Command npx -ErrorAction SilentlyContinue)?.Source ?? "npx"
+# Helper to invoke npm reliably on Windows. PowerShell's & operator can
+# misresolve npm (e.g., when npm.ps1 wrappers from nvm-windows/volta are
+# in PATH). Using cmd /c with the actual command string avoids all of that.
+function Invoke-Npm {
+    param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$NpmArgs)
+    $cmdLine = "npm " + ($NpmArgs -join " ")
+    & cmd /c $cmdLine
+}
+
+function Invoke-Npx {
+    param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$NpxArgs)
+    $cmdLine = "npx " + ($NpxArgs -join " ")
+    & cmd /c $cmdLine
+}
 
 # ---------------------------------------------------------------------------
 # Prerequisites check
@@ -393,24 +403,24 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Write-Host "  Installing npm dependencies..."
 Push-Location $repoRoot
 try {
-    & $npmCmd install
+    Invoke-Npm install
     if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
 
     # Build shared package first (workspace dependency)
     Write-Host "  Building shared package..."
-    & $npmCmd run build --workspace @live-translation/shared --if-present
+    Invoke-Npm run build --workspace @live-translation/shared --if-present
 
     # Build speaker and audience apps with production API URL
     $env:VITE_API_BASE_URL = "https://$containerAppFqdn"
 
     Write-Host "  Building speaker app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
     $env:VITE_BASE_PATH = "/speaker/"
-    & $npmCmd run build --workspace @live-translation/client-speaker
+    Invoke-Npm run build --workspace @live-translation/client-speaker
     if ($LASTEXITCODE -ne 0) { throw "Speaker app build failed" }
     Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
 
     Write-Host "  Building audience app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
-    & $npmCmd run build --workspace @live-translation/client-audience
+    Invoke-Npm run build --workspace @live-translation/client-audience
     if ($LASTEXITCODE -ne 0) { throw "Audience app build failed" }
 
     # Combine both apps into a single output directory:
@@ -455,9 +465,7 @@ try {
         --query "properties.apiKey" --output tsv
 
     Write-Host "  Deploying to Static Web App..."
-    & $npxCmd --yes @azure/static-web-apps-cli deploy $combinedOutput `
-        --deployment-token $deploymentToken `
-        --env production
+    Invoke-Npx --yes @azure/static-web-apps-cli deploy `"$combinedOutput`" --deployment-token $deploymentToken --env production
     if ($LASTEXITCODE -ne 0) { throw "SWA deployment failed" }
 
     # Cleanup temporary output directory
