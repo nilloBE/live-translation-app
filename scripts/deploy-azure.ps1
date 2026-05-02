@@ -442,13 +442,23 @@ try {
     New-Item -ItemType Directory -Path $speakerOutputDir -Force | Out-Null
     Copy-Item -Recurse -Path "$speakerDist\*" -Destination $speakerOutputDir
 
-    # Create staticwebapp.config.json for SPA routing
+    # Create staticwebapp.config.json for SPA routing.
+    # Note: SWA only allows ONE wildcard '*' per route/exclude pattern.
+    # Extensions must be combined with brace expansion: *.{ext1,ext2}
     $swaConfig = @{
         navigationFallback = @{
             rewrite = "/index.html"
-            exclude = @("/speaker/*.*", "/assets/*.*", "/*.ico", "/*.svg", "/*.png")
+            exclude = @(
+                "/speaker/*",
+                "/assets/*",
+                "/*.{ico,svg,png,jpg,jpeg,gif,css,js,json,webmanifest,woff,woff2,ttf,map}"
+            )
         }
         routes = @(
+            @{
+                route = "/speaker"
+                rewrite = "/speaker/index.html"
+            },
             @{
                 route = "/speaker/*"
                 rewrite = "/speaker/index.html"
