@@ -118,6 +118,11 @@ function Set-RoleAssignmentIfMissing {
         --output none
 }
 
+# On Windows, npm and npx are .cmd files. Resolve them explicitly to avoid
+# PowerShell's & operator misresolving the command.
+$npmCmd = (Get-Command npm -ErrorAction SilentlyContinue)?.Source ?? "npm"
+$npxCmd = (Get-Command npx -ErrorAction SilentlyContinue)?.Source ?? "npx"
+
 # ---------------------------------------------------------------------------
 # Prerequisites check
 # ---------------------------------------------------------------------------
@@ -388,24 +393,24 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Write-Host "  Installing npm dependencies..."
 Push-Location $repoRoot
 try {
-    & npm install
+    & $npmCmd install
     if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
 
     # Build shared package first (workspace dependency)
     Write-Host "  Building shared package..."
-    & npm run build --workspace @live-translation/shared --if-present
+    & $npmCmd run build --workspace @live-translation/shared --if-present
 
     # Build speaker and audience apps with production API URL
     $env:VITE_API_BASE_URL = "https://$containerAppFqdn"
 
     Write-Host "  Building speaker app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
     $env:VITE_BASE_PATH = "/speaker/"
-    & npm run build --workspace @live-translation/client-speaker
+    & $npmCmd run build --workspace @live-translation/client-speaker
     if ($LASTEXITCODE -ne 0) { throw "Speaker app build failed" }
     Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
 
     Write-Host "  Building audience app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
-    & npm run build --workspace @live-translation/client-audience
+    & $npmCmd run build --workspace @live-translation/client-audience
     if ($LASTEXITCODE -ne 0) { throw "Audience app build failed" }
 
     # Combine both apps into a single output directory:
@@ -450,7 +455,7 @@ try {
         --query "properties.apiKey" --output tsv
 
     Write-Host "  Deploying to Static Web App..."
-    & npx --yes @azure/static-web-apps-cli deploy $combinedOutput `
+    & $npxCmd --yes @azure/static-web-apps-cli deploy $combinedOutput `
         --deployment-token $deploymentToken `
         --env production
     if ($LASTEXITCODE -ne 0) { throw "SWA deployment failed" }
