@@ -252,19 +252,14 @@ This script:
 3. Builds the backend Docker image using ACR Tasks (no local Docker required)
 4. Deploys the Container App with system-assigned Managed Identity
 5. Assigns RBAC roles: `Cognitive Services Speech User`, `AcrPull`, `SignalR App Server`
-6. Outputs the backend URL and Static Web App URL
+6. Builds both frontend apps with the backend URL baked in
+7. Deploys the combined frontend to the Static Web App
 
-After the script completes, deploy the frontend:
+Once complete, the script prints the live URLs:
 
-```powershell
-# Build both client apps pointing to the deployed backend
-$env:VITE_API_BASE_URL = "https://<your-container-app-fqdn>"
-npm run build:speaker
-npm run build:audience
-
-# Deploy using SWA CLI (install once: npm install -g @azure/static-web-apps-cli)
-swa deploy ./client-speaker/dist --env production --app-name web-live-translation-dev
-```
+- **Audience app** (root): `https://<swa-hostname>/`
+- **Speaker app**: `https://<swa-hostname>/speaker/`
+- **Backend API**: `https://<container-app-fqdn>/`
 
 You can override defaults with parameters or environment variables:
 

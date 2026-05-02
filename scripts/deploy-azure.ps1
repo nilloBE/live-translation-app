@@ -163,13 +163,13 @@ Write-Host ""
 # ===========================================================================
 # Step 1: Resource Group
 # ===========================================================================
-Write-Host "[1/9] Creating resource group..."
+Write-Host "[1/10] Creating resource group..."
 Invoke-Az group create --name $ResourceGroup --location $Location --output none
 
 # ===========================================================================
 # Step 2: Azure AI Speech (with custom subdomain for Entra ID token exchange)
 # ===========================================================================
-Write-Host "[2/9] Provisioning Azure AI Speech resource..."
+Write-Host "[2/10] Provisioning Azure AI Speech resource..."
 if (Test-AzResource cognitiveservices account show --name $SpeechResourceName --resource-group $ResourceGroup) {
     Write-Host "  Already exists: $SpeechResourceName"
 } else {
@@ -192,7 +192,7 @@ $speechResourceId = Invoke-AzText cognitiveservices account show `
 # ===========================================================================
 # Step 3: Azure SignalR Service
 # ===========================================================================
-Write-Host "[3/9] Provisioning Azure SignalR Service..."
+Write-Host "[3/10] Provisioning Azure SignalR Service..."
 if (Test-AzResource signalr show --name $SignalRResourceName --resource-group $ResourceGroup) {
     Write-Host "  Already exists: $SignalRResourceName"
 } else {
@@ -213,7 +213,7 @@ $signalrResourceId = Invoke-AzText signalr show `
 # ===========================================================================
 # Step 4: Azure Container Registry
 # ===========================================================================
-Write-Host "[4/9] Provisioning Azure Container Registry..."
+Write-Host "[4/10] Provisioning Azure Container Registry..."
 if (Test-AzResource acr show --name $ContainerRegistryName --resource-group $ResourceGroup) {
     Write-Host "  Already exists: $ContainerRegistryName"
 } else {
@@ -233,7 +233,7 @@ $acrResourceId = Invoke-AzText acr show `
 # ===========================================================================
 # Step 5: Build & Push Docker Image (using ACR Tasks — no local Docker needed)
 # ===========================================================================
-Write-Host "[5/9] Building and pushing Docker image to ACR..."
+Write-Host "[5/10] Building and pushing Docker image to ACR..."
 Invoke-Az acr build `
     --registry $ContainerRegistryName `
     --image "${ImageName}:${ImageTag}" `
@@ -243,7 +243,7 @@ Invoke-Az acr build `
 # ===========================================================================
 # Step 6: Container Apps Environment
 # ===========================================================================
-Write-Host "[6/9] Provisioning Container Apps Environment..."
+Write-Host "[6/10] Provisioning Container Apps Environment..."
 if (Test-AzResource containerapp env show --name $ContainerAppEnvironmentName --resource-group $ResourceGroup) {
     Write-Host "  Already exists: $ContainerAppEnvironmentName"
 } else {
@@ -257,7 +257,7 @@ if (Test-AzResource containerapp env show --name $ContainerAppEnvironmentName --
 # ===========================================================================
 # Step 7: Container App (with system-assigned Managed Identity)
 # ===========================================================================
-Write-Host "[7/9] Deploying Container App..."
+Write-Host "[7/10] Deploying Container App..."
 
 # Get the Static Web App URL for CORS (if it exists already)
 $swaHostname = ""
@@ -324,7 +324,7 @@ $appIdentityPrincipalId = Invoke-AzText containerapp identity show `
 # ===========================================================================
 # Step 8: RBAC Role Assignments for Container App Managed Identity
 # ===========================================================================
-Write-Host "[8/9] Assigning RBAC roles to Container App identity..."
+Write-Host "[8/10] Assigning RBAC roles to Container App identity..."
 
 # Speech User role — allows requesting authorization tokens
 Set-RoleAssignmentIfMissing `
@@ -345,9 +345,9 @@ Set-RoleAssignmentIfMissing `
     -Scope $signalrResourceId
 
 # ===========================================================================
-# Step 9: Static Web App (frontend)
+# Step 9: Static Web App + Frontend Build & Deploy
 # ===========================================================================
-Write-Host "[9/9] Provisioning Static Web App..."
+Write-Host "[9/10] Provisioning Static Web App..."
 if (Test-AzResource staticwebapp show --name $StaticWebAppName --resource-group $ResourceGroup) {
     Write-Host "  Already exists: $StaticWebAppName"
 } else {
@@ -378,6 +378,95 @@ Invoke-Az containerapp update `
     --output none
 
 # ===========================================================================
+# Step 10: Build and deploy frontend to Static Web App
+# ===========================================================================
+Write-Host "[10/10] Building and deploying frontend..."
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+
+# Install dependencies (npm workspaces)
+Write-Host "  Installing npm dependencies..."
+Push-Location $repoRoot
+try {
+    & npm ci --ignore-scripts 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & npm install 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+    }
+
+    # Build shared package first (workspace dependency)
+    Write-Host "  Building shared package..."
+    & npm run build --workspace @live-translation/shared --if-present 2>&1 | Out-Null
+
+    # Build speaker and audience apps with production API URL
+    $env:VITE_API_BASE_URL = "https://$containerAppFqdn"
+
+    Write-Host "  Building speaker app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
+    $env:VITE_BASE_PATH = "/speaker/"
+    & npm run build --workspace @live-translation/client-speaker
+    if ($LASTEXITCODE -ne 0) { throw "Speaker app build failed" }
+    Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
+
+    Write-Host "  Building audience app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
+    & npm run build --workspace @live-translation/client-audience
+    if ($LASTEXITCODE -ne 0) { throw "Audience app build failed" }
+
+    # Combine both apps into a single output directory:
+    #   /           → audience app (primary public-facing app)
+    #   /speaker/   → speaker app
+    $combinedOutput = Join-Path $repoRoot ".deploy-output"
+    if (Test-Path $combinedOutput) { Remove-Item -Recurse -Force $combinedOutput }
+    New-Item -ItemType Directory -Path $combinedOutput -Force | Out-Null
+
+    $audienceDist = Join-Path $repoRoot "client-audience" "dist"
+    $speakerDist = Join-Path $repoRoot "client-speaker" "dist"
+
+    if (-not (Test-Path $audienceDist)) { throw "Audience dist not found at $audienceDist" }
+    if (-not (Test-Path $speakerDist)) { throw "Speaker dist not found at $speakerDist" }
+
+    Write-Host "  Combining outputs (audience at /, speaker at /speaker/)..."
+    Copy-Item -Recurse -Path "$audienceDist\*" -Destination $combinedOutput
+    $speakerOutputDir = Join-Path $combinedOutput "speaker"
+    New-Item -ItemType Directory -Path $speakerOutputDir -Force | Out-Null
+    Copy-Item -Recurse -Path "$speakerDist\*" -Destination $speakerOutputDir
+
+    # Create staticwebapp.config.json for SPA routing
+    $swaConfig = @{
+        navigationFallback = @{
+            rewrite = "/index.html"
+            exclude = @("/speaker/*.*", "/assets/*.*", "/*.ico", "/*.svg", "/*.png")
+        }
+        routes = @(
+            @{
+                route = "/speaker/*"
+                rewrite = "/speaker/index.html"
+            }
+        )
+    }
+    $swaConfig | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $combinedOutput "staticwebapp.config.json") -Encoding UTF8
+
+    # Deploy to Static Web App
+    Write-Host "  Retrieving SWA deployment token..."
+    $deploymentToken = Invoke-AzText staticwebapp secrets list `
+        --name $StaticWebAppName `
+        --resource-group $ResourceGroup `
+        --query "properties.apiKey" --output tsv
+
+    Write-Host "  Deploying to Static Web App..."
+    & npx --yes @azure/static-web-apps-cli deploy $combinedOutput `
+        --deployment-token $deploymentToken `
+        --env production
+    if ($LASTEXITCODE -ne 0) { throw "SWA deployment failed" }
+
+    # Cleanup temporary output directory
+    Remove-Item -Recurse -Force $combinedOutput -ErrorAction SilentlyContinue
+} finally {
+    # Restore environment
+    Remove-Item Env:\VITE_API_BASE_URL -ErrorAction SilentlyContinue
+    Pop-Location
+}
+
+# ===========================================================================
 # Summary
 # ===========================================================================
 Write-Host ""
@@ -385,19 +474,10 @@ Write-Host "========================================"
 Write-Host " Deployment Complete!"
 Write-Host "========================================"
 Write-Host ""
-Write-Host "Backend API:  https://$containerAppFqdn"
-Write-Host "Health check: https://$containerAppFqdn/health"
+Write-Host "Backend API:     https://$containerAppFqdn"
+Write-Host "Health check:    https://$containerAppFqdn/health"
 Write-Host ""
-Write-Host "Static Web App: https://$swaHostname"
-Write-Host ""
-Write-Host "To deploy the frontend, build the client apps with:"
-Write-Host "  VITE_API_BASE_URL=https://$containerAppFqdn npm run build:speaker"
-Write-Host "  VITE_API_BASE_URL=https://$containerAppFqdn npm run build:audience"
-Write-Host ""
-Write-Host "Then deploy using the SWA CLI:"
-Write-Host "  npx @azure/static-web-apps-cli deploy ./client-speaker/dist --env production"
-Write-Host ""
-Write-Host "Or use 'az staticwebapp deploy' with the deployment token:"
-Write-Host "  az staticwebapp secrets list --name $StaticWebAppName --resource-group $ResourceGroup"
+Write-Host "Audience app:    https://$swaHostname"
+Write-Host "Speaker app:     https://$swaHostname/speaker/"
 Write-Host ""
 Write-Host "No API keys or secrets were used. All auth is via Microsoft Entra ID."

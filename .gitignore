@@ -10,6 +10,7 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+.deploy-output/
 
 # Environment files - never commit real values
 .env
