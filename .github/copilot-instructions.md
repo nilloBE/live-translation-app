@@ -199,7 +199,7 @@ live-translation-app/
 ├── server/                    # Node.js backend (Dockerized)
 │   ├── src/
 │   │   ├── index.ts
-│   │   ├── auth.ts            # Token broker (DefaultAzureCredential)
+│   │   ├── auth.ts            # Azure credential factory (DefaultAzureCredential)
 │   │   ├── realtime.ts        # Local Socket.IO room relay
 │   │   └── routes/
 │   ├── Dockerfile             # Multi-stage Docker build
@@ -235,7 +235,7 @@ This creates or reuses:
 - Resource group: `rg-live-translation-dev`
 - Speech resource: `speech-live-translation-dev`
 - Speech custom subdomain endpoint: `https://speech-live-translation-dev.cognitiveservices.azure.com`
-- RBAC: `Cognitive Services Speech User` for the signed-in Azure CLI user scoped to the Speech resource
+- RBAC: `Cognitive Services Speech User` and `Live Translation Speech Token Issuer` (custom least-privilege role) for the signed-in Azure CLI user scoped to the Speech resource
 
 If the subscription cannot create another free `F0` Speech resource, use an existing Speech resource or change the script SKU to `S0` for the dev environment.
 

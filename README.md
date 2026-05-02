@@ -4,7 +4,7 @@ Live Translation App is a web-based captioning experience for presenters and aud
 
 ## Current Scope
 
-This repository currently includes the Phase 1 scaffold, Phase 2 local Speech translation, Phase 3 local room broadcasting, and Phase 4 UX polish:
+This repository includes all five phases: Phase 1 scaffold, Phase 2 local Speech translation, Phase 3 local room broadcasting, Phase 4 UX polish, and Phase 5 full Azure deployment:
 
 - React + TypeScript + Vite speaker app in `client-speaker/`
 - Minimal React + TypeScript + Vite audience app in `client-audience/`
@@ -17,7 +17,8 @@ This repository currently includes the Phase 1 scaffold, Phase 2 local Speech tr
 - Audience onboarding in French, Dutch, and English with per-audience target language selection
 - Polished session controls, generated/copyable room codes, status indicators, clear actions, and mobile-friendly subtitles
 - Backend Dockerfile and local `docker-compose.yml`
-- PowerShell Azure CLI provisioning script in `scripts/setup-azure.ps1`
+- PowerShell Azure CLI provisioning scripts in `scripts/setup-azure.ps1` and `scripts/deploy-azure.ps1`
+- Full deployment to Azure Container Apps (backend) and Azure Static Web Apps (frontend) with Managed Identity
 - Public-repo-safe `.env.example` files with placeholders only
 - Setup instructions for local development and Azure prerequisites
 
@@ -225,10 +226,6 @@ live-translation-app/
 ├── .env.example               # Shared Azure resource placeholders
 └── README.md
 ```
-
-## Next Phases
-
-Phase 5 deployment scripts are available for deploying the full stack to Azure. See the Azure Deployment section below.
 
 ## Azure Deployment (Phase 5)
 
