@@ -118,6 +118,83 @@ function Set-RoleAssignmentIfMissing {
         --output none
 }
 
+function Set-RoleAssignmentByDefinitionIdIfMissing {
+    param(
+        [string]$AssigneeObjectId,
+        [string]$RoleDefinitionId,
+        [string]$RoleDisplayName,
+        [string]$Scope
+    )
+    $existing = Invoke-AzText role assignment list `
+        --assignee $AssigneeObjectId `
+        --scope $Scope `
+        --query "[?ends_with(roleDefinitionId, '$RoleDefinitionId')][0].id" `
+        --output tsv
+    if (-not [string]::IsNullOrWhiteSpace($existing)) {
+        Write-Host "  Role '$RoleDisplayName' already assigned."
+        return
+    }
+    Write-Host "  Assigning role '$RoleDisplayName'..."
+    Invoke-Az role assignment create `
+        --assignee-object-id $AssigneeObjectId `
+        --assignee-principal-type ServicePrincipal `
+        --role $RoleDefinitionId `
+        --scope $Scope `
+        --output none
+}
+
+function Ensure-SpeechTokenIssuerRole {
+    param(
+        [string]$SubscriptionId,
+        [string]$ResourceGroup
+    )
+
+    $roleName = "Live Translation Speech Token Issuer"
+    $roleId = Invoke-AzText role definition list `
+        --custom-role-only true `
+        --query "[?roleName=='$roleName']|[0].name" `
+        --output tsv
+
+    if (-not [string]::IsNullOrWhiteSpace($roleId)) {
+        Write-Host "  Custom role '$roleName' already exists."
+        return $roleId
+    }
+
+    Write-Host "  Creating custom role '$roleName'..."
+    $assignableScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+    $roleDefinition = [ordered]@{
+        Name = $roleName
+        IsCustom = $true
+        Description = "Allows issuing Azure AI Speech authorization tokens without access to API keys."
+        Actions = @("Microsoft.CognitiveServices/accounts/read")
+        NotActions = @()
+        DataActions = @("Microsoft.CognitiveServices/accounts/SpeechServices/issuetoken/action")
+        NotDataActions = @()
+        AssignableScopes = @($assignableScope)
+    }
+
+    $roleDefinitionPath = Join-Path ([System.IO.Path]::GetTempPath()) "live-translation-speech-token-role.json"
+    $roleDefinition | ConvertTo-Json -Depth 5 | Set-Content $roleDefinitionPath -Encoding UTF8
+    try {
+        Invoke-Az role definition create --role-definition $roleDefinitionPath --output none
+    } finally {
+        Remove-Item $roleDefinitionPath -ErrorAction SilentlyContinue
+    }
+
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        $roleId = Invoke-AzText role definition list `
+            --custom-role-only true `
+            --query "[?roleName=='$roleName']|[0].name" `
+            --output tsv
+        if (-not [string]::IsNullOrWhiteSpace($roleId)) {
+            return $roleId
+        }
+        Start-Sleep -Seconds 5
+    }
+
+    throw "Custom role '$roleName' was created but was not available for assignment yet. Re-run the script in a few minutes."
+}
+
 # Helper to invoke npm reliably on Windows. PowerShell's & operator can
 # misresolve npm (e.g., when npm.ps1 wrappers from nvm-windows/volta are
 # in PATH). Using cmd /c with the actual command string avoids all of that.
@@ -156,6 +233,7 @@ $StaticWebAppName = Get-Setting $StaticWebAppName "STATIC_WEB_APP_NAME" "web-liv
 $ImageName = "live-translation-api"
 $ImageTag = "latest"
 $FullImageName = "$ContainerRegistryName.azurecr.io/${ImageName}:${ImageTag}"
+$SubscriptionId = Invoke-AzText account show --query id --output tsv
 
 Write-Host "========================================"
 Write-Host " Live Translation App - Azure Deployment"
@@ -347,6 +425,19 @@ Set-RoleAssignmentIfMissing `
     -RoleName "Cognitive Services Speech User" `
     -Scope $speechResourceId
 
+# The Speech token broker calls /sts/v1.0/issueToken. The built-in
+# "Cognitive Services Speech User" role does not currently include the
+# required issuetoken/action data action, so add a narrow custom role rather
+# than granting broad key-listing permissions.
+$speechTokenIssuerRoleId = Ensure-SpeechTokenIssuerRole `
+    -SubscriptionId $SubscriptionId `
+    -ResourceGroup $ResourceGroup
+Set-RoleAssignmentByDefinitionIdIfMissing `
+    -AssigneeObjectId $appIdentityPrincipalId `
+    -RoleDefinitionId $speechTokenIssuerRoleId `
+    -RoleDisplayName "Live Translation Speech Token Issuer" `
+    -Scope $speechResourceId
+
 # ACR Pull — allows pulling images from the container registry
 Set-RoleAssignmentIfMissing `
     -AssigneeObjectId $appIdentityPrincipalId `
@@ -474,8 +565,13 @@ try {
         --query "properties.apiKey" --output tsv
 
     Write-Host "  Deploying to Static Web App..."
-    Invoke-Npx --yes @azure/static-web-apps-cli deploy `"$combinedOutput`" --deployment-token $deploymentToken --env production
-    if ($LASTEXITCODE -ne 0) { throw "SWA deployment failed" }
+    $env:SWA_CLI_DEPLOYMENT_TOKEN = $deploymentToken
+    try {
+        Invoke-Npx --yes @azure/static-web-apps-cli deploy `"$combinedOutput`" --env production
+        if ($LASTEXITCODE -ne 0) { throw "SWA deployment failed" }
+    } finally {
+        Remove-Item Env:\SWA_CLI_DEPLOYMENT_TOKEN -ErrorAction SilentlyContinue
+    }
 
     # Cleanup temporary output directory
     Remove-Item -Recurse -Force $combinedOutput -ErrorAction SilentlyContinue

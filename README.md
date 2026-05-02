@@ -95,7 +95,7 @@ Audience preferences are stored locally with these keys: `live-translation:audie
 
 ## Phase 2 Local Speech Translation
 
-Before using the speaker console, make sure the signed-in Azure CLI user has `Cognitive Services Speech User` on the Azure AI Speech resource:
+Before using the speaker console, make sure the signed-in Azure CLI user has Speech RBAC on the Azure AI Speech resource. The setup script assigns both `Cognitive Services Speech User` and the least-privilege custom `Live Translation Speech Token Issuer` role used by the `/api/speech-token` broker:
 
 ```powershell
 az login
@@ -162,11 +162,11 @@ For Phase 2 local Speech translation work, the minimal Azure setup is:
 - A dev resource group, such as `rg-live-translation-dev`
 - An Azure AI Speech resource in that group
 - A Speech custom subdomain endpoint, such as `https://speech-live-translation-dev.cognitiveservices.azure.com`
-- `Cognitive Services Speech User` assigned to your signed-in Azure user on the Speech resource
+- `Cognitive Services Speech User` and `Live Translation Speech Token Issuer` assigned to your signed-in Azure user on the Speech resource
 
 Azure SignalR belongs to the cloud-scale version of the Phase 3 realtime path. Azure Container Registry, Container Apps, and Static Web Apps belong to Phase 5 deployment work.
 
-The setup script defaults to the minimal Phase 2 resource set and assigns the current signed-in user the `Cognitive Services Speech User` role on the Speech resource.
+The setup script defaults to the minimal Phase 2 resource set and assigns the current signed-in user the required Speech roles on the Speech resource.
 
 ```powershell
 .\scripts\setup-azure.ps1
@@ -251,7 +251,7 @@ This script:
 2. Provisions Azure AI Speech (F0), SignalR (Free), Container Registry (Basic), Container Apps Environment, and Static Web App
 3. Builds the backend Docker image using ACR Tasks (no local Docker required)
 4. Deploys the Container App with system-assigned Managed Identity
-5. Assigns RBAC roles: `Cognitive Services Speech User`, `AcrPull`, `SignalR App Server`
+5. Assigns RBAC roles: `Cognitive Services Speech User`, least-privilege `Live Translation Speech Token Issuer`, `AcrPull`, `SignalR App Server`
 6. Builds both frontend apps with the backend URL baked in
 7. Deploys the combined frontend to the Static Web App
 

@@ -38,7 +38,7 @@ This is a web-based live translation application that:
    - In production: uses Managed Identity assigned to the Azure Container App
 2. **Backend exposes `/api/speech-token`** — fetches a short-lived (10 min) authorization token from the Azure Speech Service token endpoint using Entra ID credentials.
 3. **Frontend (Speaker App)** calls the backend token endpoint, receives the short-lived token, and initializes the Speech SDK with `SpeechTranslationConfig.fromAuthorizationToken(token, region)`.
-4. **RBAC Role Assignment** — the developer (and the Container App managed identity) are assigned the `Cognitive Services Speech User` role on the Speech resource.
+4. **RBAC Role Assignment** — the developer (and the Container App managed identity) are assigned Speech RBAC on the Speech resource. For production Container Apps, `scripts/deploy-azure.ps1` also creates and assigns a least-privilege custom `Live Translation Speech Token Issuer` role containing `Microsoft.CognitiveServices/accounts/SpeechServices/issuetoken/action`, because the built-in `Cognitive Services Speech User` role does not currently include the `/sts/v1.0/issueToken` data action.
 
 ### Key Components
 
@@ -157,7 +157,7 @@ Phase 4 implementation notes:
 - Create Azure Container Registry (ACR) in the same environment resource group and build/push backend Docker image
 - Create Azure Container Apps Environment in the same environment resource group and deploy backend container
 - Enable system-assigned Managed Identity on the Container App
-- Assign RBAC roles to Managed Identity (Cognitive Services Speech User, SignalR App Server)
+- Assign RBAC roles to Managed Identity (Cognitive Services Speech User, Live Translation Speech Token Issuer, SignalR App Server)
 - Deploy frontend to Azure Static Web Apps
 - Configure environment variables (non-secret: region, endpoints)
 - Update Azure CLI script for full deployment with identity setup
@@ -253,7 +253,7 @@ Full mode also creates or reuses Azure SignalR Service, Azure Container Registry
 .\scripts\deploy-azure.ps1
 ```
 
-This single script provisions all resources, builds the Docker image in ACR, deploys the Container App with Managed Identity, assigns all RBAC roles, and creates the Static Web App. No API keys are used at any point. After the backend is deployed, build the frontend clients with `VITE_API_BASE_URL` set to the Container App FQDN and deploy to the Static Web App.
+This single script provisions all resources, builds the Docker image in ACR, deploys the Container App with Managed Identity, assigns all RBAC roles (including the least-privilege custom Speech token issuer role), builds both frontend clients with `VITE_API_BASE_URL` set to the Container App FQDN, and deploys the combined frontend to the Static Web App. No API keys are used at any point.
 
 ### Cleanup (delete everything)
 

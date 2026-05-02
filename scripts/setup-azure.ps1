@@ -98,6 +98,85 @@ function Set-RoleAssignmentIfMissing {
         --output none
 }
 
+function Set-RoleAssignmentByDefinitionIdIfMissing {
+    param(
+        [string]$AssigneeObjectId,
+        [string]$RoleDefinitionId,
+        [string]$RoleDisplayName,
+        [string]$Scope
+    )
+
+    $existingAssignment = Invoke-AzText role assignment list `
+        --assignee $AssigneeObjectId `
+        --scope $Scope `
+        --query "[?ends_with(roleDefinitionId, '$RoleDefinitionId')][0].id" `
+        --output tsv
+
+    if (-not [string]::IsNullOrWhiteSpace($existingAssignment)) {
+        Write-Host "Role assignment already exists: $RoleDisplayName"
+        return
+    }
+
+    Write-Host "Assigning $RoleDisplayName role to signed-in user"
+    Invoke-Az role assignment create `
+        --assignee $AssigneeObjectId `
+        --role $RoleDefinitionId `
+        --scope $Scope `
+        --output none
+}
+
+function Ensure-SpeechTokenIssuerRole {
+    param(
+        [string]$SubscriptionId,
+        [string]$ResourceGroup
+    )
+
+    $roleName = "Live Translation Speech Token Issuer"
+    $roleId = Invoke-AzText role definition list `
+        --custom-role-only true `
+        --query "[?roleName=='$roleName']|[0].name" `
+        --output tsv
+
+    if (-not [string]::IsNullOrWhiteSpace($roleId)) {
+        Write-Host "Custom role already exists: $roleName"
+        return $roleId
+    }
+
+    Write-Host "Creating custom role: $roleName"
+    $assignableScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup"
+    $roleDefinition = [ordered]@{
+        Name = $roleName
+        IsCustom = $true
+        Description = "Allows issuing Azure AI Speech authorization tokens without access to API keys."
+        Actions = @("Microsoft.CognitiveServices/accounts/read")
+        NotActions = @()
+        DataActions = @("Microsoft.CognitiveServices/accounts/SpeechServices/issuetoken/action")
+        NotDataActions = @()
+        AssignableScopes = @($assignableScope)
+    }
+
+    $roleDefinitionPath = Join-Path ([System.IO.Path]::GetTempPath()) "live-translation-speech-token-role.json"
+    $roleDefinition | ConvertTo-Json -Depth 5 | Set-Content $roleDefinitionPath -Encoding UTF8
+    try {
+        Invoke-Az role definition create --role-definition $roleDefinitionPath --output none
+    } finally {
+        Remove-Item $roleDefinitionPath -ErrorAction SilentlyContinue
+    }
+
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        $roleId = Invoke-AzText role definition list `
+            --custom-role-only true `
+            --query "[?roleName=='$roleName']|[0].name" `
+            --output tsv
+        if (-not [string]::IsNullOrWhiteSpace($roleId)) {
+            return $roleId
+        }
+        Start-Sleep -Seconds 5
+    }
+
+    throw "Custom role '$roleName' was created but was not available for assignment yet. Re-run the script in a few minutes."
+}
+
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw "Azure CLI was not found. Install it from https://learn.microsoft.com/cli/azure/install-azure-cli, then run 'az login'."
 }
@@ -118,6 +197,7 @@ if ($Mode -notin @("Phase2", "Full")) {
 
 Write-Host "Using subscription:"
 Invoke-Az account show --query "{name:name, id:id}" --output table
+$subscriptionId = Invoke-AzText account show --query id --output tsv
 
 Write-Host "Creating resource group $ResourceGroup in $Location"
 Invoke-Az group create `
@@ -170,6 +250,16 @@ $userObjectId = Invoke-AzText ad signed-in-user show --query id --output tsv
 Set-RoleAssignmentIfMissing `
     -AssigneeObjectId $userObjectId `
     -RoleName "Cognitive Services Speech User" `
+    -Scope $speechResourceId
+
+$speechTokenIssuerRoleId = Ensure-SpeechTokenIssuerRole `
+    -SubscriptionId $subscriptionId `
+    -ResourceGroup $ResourceGroup
+
+Set-RoleAssignmentByDefinitionIdIfMissing `
+    -AssigneeObjectId $userObjectId `
+    -RoleDefinitionId $speechTokenIssuerRoleId `
+    -RoleDisplayName "Live Translation Speech Token Issuer" `
     -Scope $speechResourceId
 
 if ($Mode -eq "Full") {

@@ -66,7 +66,7 @@ export const targetLanguages: TargetLanguage[] = [
 export function createRealtimeConnection(apiBaseUrl: string): RealtimeConnection {
   return io(apiBaseUrl, {
     autoConnect: false,
-    transports: ["websocket", "polling"],
+    transports: ["polling", "websocket"],
   });
 }
 
