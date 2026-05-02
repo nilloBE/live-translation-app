@@ -443,8 +443,11 @@ try {
     Copy-Item -Recurse -Path "$speakerDist\*" -Destination $speakerOutputDir
 
     # Create staticwebapp.config.json for SPA routing.
-    # Note: SWA only allows ONE wildcard '*' per route/exclude pattern.
-    # Extensions must be combined with brace expansion: *.{ext1,ext2}
+    # Routes are matched in order; first match wins.
+    # - /speaker/assets/* has NO rewrite so assets are served as actual files.
+    # - /speaker/* is the SPA catch-all; rewrites to the speaker index.html.
+    # Note: SWA allows at most ONE wildcard '*' per pattern, and treats
+    # /speaker and /speaker/ as the same route (no trailing-slash duplicate).
     $swaConfig = @{
         navigationFallback = @{
             rewrite = "/index.html"
@@ -455,14 +458,10 @@ try {
             )
         }
         routes = @(
-            @{
-                route = "/speaker"
-                rewrite = "/speaker/index.html"
-            },
-            @{
-                route = "/speaker/*"
-                rewrite = "/speaker/index.html"
-            }
+            # Assets must come first — no rewrite means the file is served as-is
+            @{ route = "/speaker/assets/*" },
+            # SPA catch-all for all other /speaker/* navigation paths
+            @{ route = "/speaker/*"; rewrite = "/speaker/index.html" }
         )
     }
     $swaConfig | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $combinedOutput "staticwebapp.config.json") -Encoding UTF8
