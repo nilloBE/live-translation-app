@@ -26,6 +26,7 @@ export interface StartTranslationOptions {
   apiBaseUrl: string;
   sourceLanguage: string;
   targetLanguages: string[];
+  phraseHints?: string[];
   onUpdate: (update: TranslationUpdate) => void;
   onStatus: (status: string) => void;
   onError: (message: string) => void;
@@ -49,6 +50,7 @@ export async function startTranslationSession({
   apiBaseUrl,
   sourceLanguage,
   targetLanguages: requestedTargets,
+  phraseHints = [],
   onUpdate,
   onStatus,
   onError,
@@ -70,6 +72,11 @@ export async function startTranslationSession({
 
   const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   const recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+  const phraseList = SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer);
+  for (const phrase of phraseHints) {
+    phraseList.addPhrase(phrase);
+  }
+
   let refreshTimer: number | undefined;
 
   recognizer.recognizing = (_sender, event) => {

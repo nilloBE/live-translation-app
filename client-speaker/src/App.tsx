@@ -18,11 +18,14 @@ import {
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 const defaultSpeakerSource = "fr-FR";
 const defaultSpeakerTargets = ["en", "nl", "es"];
+const maxPhraseHints = 100;
+const maxPhraseHintLength = 100;
 
 export function App() {
   const [roomInput, setRoomInput] = useState(() => generateRoomCode());
   const [speakerSource, setSpeakerSource] = useState<string>(defaultSpeakerSource);
   const [speakerTargets, setSpeakerTargets] = useState<string[]>(defaultSpeakerTargets);
+  const [phraseHintsText, setPhraseHintsText] = useState("");
   const [previewTarget, setPreviewTarget] = useState<string>(defaultSpeakerTargets[0]);
   const [isListening, setIsListening] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -73,12 +76,17 @@ export function App() {
     connectSpeakerRelay();
 
     const sessionTargets = [...speakerTargets];
+    const phraseHintParse = parsePhraseHints(phraseHintsText, maxPhraseHints, maxPhraseHintLength);
+    if (phraseHintParse.skippedCount > 0) {
+      setNotice(`Skipped ${phraseHintParse.skippedCount} phrase hint(s) due to duplicates or limits.`);
+    }
 
     try {
       sessionRef.current = await startTranslationSession({
         apiBaseUrl,
         sourceLanguage: speakerSource,
         targetLanguages: sessionTargets,
+        phraseHints: phraseHintParse.phrases,
         onStatus: setSpeechStatus,
         onError: (message) => {
           setError(message);
@@ -234,6 +242,8 @@ export function App() {
           onRoomInputChange={handleRoomInputChange}
           onGenerateRoom={handleGenerateRoom}
           onCopyRoom={handleCopyRoom}
+          phraseHintsText={phraseHintsText}
+          onPhraseHintsTextChange={setPhraseHintsText}
           speakerSourceLanguage={speakerSource}
           speakerTargetLanguages={speakerTargets}
           onSpeakerSourceChange={setSpeakerSource}
@@ -303,4 +313,30 @@ function generateRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const randomPart = Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   return `LIVE-${randomPart}`;
+}
+
+function parsePhraseHints(input: string, maxCount: number, maxLength: number) {
+  const deduped = new Set<string>();
+  let skippedCount = 0;
+
+  for (const line of input.split(/\r?\n/u)) {
+    const phrase = line.trim();
+    if (!phrase) {
+      continue;
+    }
+    if (phrase.length > maxLength || deduped.has(phrase)) {
+      skippedCount += 1;
+      continue;
+    }
+    if (deduped.size >= maxCount) {
+      skippedCount += 1;
+      continue;
+    }
+    deduped.add(phrase);
+  }
+
+  return {
+    phrases: [...deduped],
+    skippedCount,
+  };
 }

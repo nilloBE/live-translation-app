@@ -123,6 +123,31 @@ h1 {
   background: #ffffff;
 }
 
+.phrase-hints-field {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 320px);
+  color: #18212f;
+  font-weight: 800;
+}
+
+.phrase-hints-field textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 92px;
+  border: 1px solid #bdc8d6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #18212f;
+  background: #ffffff;
+}
+
+.phrase-hints-field small {
+  color: #566276;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .inline-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px 44px;

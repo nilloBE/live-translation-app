@@ -13,6 +13,8 @@ interface SessionControlsProps {
   onRoomInputChange: (roomCode: string) => void;
   onGenerateRoom: () => void;
   onCopyRoom: () => void;
+  phraseHintsText?: string;
+  onPhraseHintsTextChange?: (value: string) => void;
   speakerSourceLanguage?: string;
   speakerTargetLanguages?: string[];
   onSpeakerSourceChange?: (code: string) => void;
@@ -26,6 +28,8 @@ export function SessionControls({
   onRoomInputChange,
   onGenerateRoom,
   onCopyRoom,
+  phraseHintsText,
+  onPhraseHintsTextChange,
   speakerSourceLanguage,
   speakerTargetLanguages,
   onSpeakerSourceChange,
@@ -59,6 +63,18 @@ export function SessionControls({
         onSourceChange={onSpeakerSourceChange ?? (() => {})}
         onTargetToggle={onSpeakerTargetToggle ?? (() => {})}
       />
+
+      <label className="phrase-hints-field">
+        <span>Phrase hints</span>
+        <textarea
+          value={phraseHintsText ?? ""}
+          onChange={(event) => onPhraseHintsTextChange?.(event.target.value)}
+          disabled={isLocked}
+          rows={4}
+          placeholder="One phrase per line"
+        />
+        <small>One phrase per line</small>
+      </label>
 
       {children}
     </div>
