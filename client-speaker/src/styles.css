@@ -95,6 +95,7 @@ h1 {
 
 .control-bar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 20px;
   align-items: end;
@@ -104,10 +105,12 @@ h1 {
 }
 
 .room-input,
-.pair-select {
+.pair-select,
+.phrase-hints-field {
   display: grid;
   gap: 8px;
-  min-width: min(100%, 320px);
+  flex: 0 1 auto;
+  min-width: min(100%, 280px);
   color: #18212f;
   font-weight: 800;
 }
@@ -121,23 +124,17 @@ h1 {
   padding: 0 12px;
   color: #18212f;
   background: #ffffff;
-}
-
-.phrase-hints-field {
-  display: grid;
-  gap: 8px;
-  min-width: min(100%, 320px);
-  color: #18212f;
-  font-weight: 800;
-}
-
-.phrase-hints-field textarea {
+}textarea {
   width: 100%;
   resize: vertical;
   min-height: 92px;
   border: 1px solid #bdc8d6;
   border-radius: 8px;
   padding: 10px 12px;
+  color: #18212f;
+  background: #ffffff;
+  font-family: inherit;
+  font-size: inherit
   color: #18212f;
   background: #ffffff;
 }
