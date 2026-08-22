@@ -47,6 +47,9 @@ export function SessionControls({
               onChange={(event) => onRoomInputChange(event.target.value)}
               disabled={isLocked}
               maxLength={16}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
             />
             <button type="button" onClick={onGenerateRoom} disabled={isLocked} aria-label="Generate room code">
               <Shuffle size={18} aria-hidden="true" />
@@ -119,6 +122,7 @@ function SpeakerLanguageControls({
                 type="button"
                 className="chip"
                 data-active={isActive}
+                aria-pressed={isActive}
                 onClick={() => onTargetToggle(language.code)}
               >
                 {language.displayName}

@@ -1,3 +1,4 @@
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { AudienceStrings } from "../i18n/strings";
 
 interface RoomPickerProps {
@@ -17,8 +18,9 @@ export function RoomPicker({
 }: RoomPickerProps) {
   return (
     <section className="step-panel" aria-labelledby="room-title">
-      <p className="eyebrow">Audience</p>
+      <p className="eyebrow">Live Translation</p>
       <h1 id="room-title">{strings.connectToRoom}</h1>
+      <p className="supporting-text" id="room-help">{strings.roomCodeHint}</p>
       <form
         className="room-form"
         onSubmit={(event) => {
@@ -33,15 +35,21 @@ export function RoomPicker({
             onChange={(event) => onRoomInputChange(event.target.value)}
             placeholder={strings.roomCodePlaceholder}
             maxLength={16}
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby="room-help"
             autoFocus
           />
         </label>
         <button className="primary-action" type="submit">
-          {strings.connect}
+          <span>{strings.connect}</span>
+          <ArrowRight aria-hidden="true" size={20} />
         </button>
       </form>
       <button className="text-action" type="button" onClick={onChangeLanguage}>
-        {strings.changeLanguage}
+        <ArrowLeft aria-hidden="true" size={18} />
+        <span>{strings.changeLanguage}</span>
       </button>
     </section>
   );

@@ -1,4 +1,4 @@
-import { Eraser, Mic, MicOff, Radio, Square } from "lucide-react";
+import { Eraser, Mic, MicOff, Minus, Plus, Radio, Square } from "lucide-react";
 import type { FinalizedCaption } from "@live-translation/shared";
 import { StatusBadge } from "./StatusBadge";
 import {
@@ -73,10 +73,10 @@ export function SpeakerView({
         <div className="font-controls" role="group" aria-label="Text size">
           <span aria-hidden="true">Text size</span>
           <button type="button" onClick={onDecreaseFont} disabled={!canDecreaseFont} aria-label="Decrease text size">
-            A-
+            <Minus size={18} aria-hidden="true" />
           </button>
           <button type="button" onClick={onIncreaseFont} disabled={!canIncreaseFont} aria-label="Increase text size">
-            A+
+            <Plus size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -114,6 +114,7 @@ export function SpeakerView({
                   key={code}
                   type="button"
                   data-active={code === activePreview}
+                  aria-pressed={code === activePreview}
                   onClick={() => onPreviewTargetChange(code)}
                 >
                   {getTargetLanguageName(code)}

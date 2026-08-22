@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { uiLanguages, type AudienceStrings, type UiLanguage } from "../i18n/strings";
 
 interface LanguagePickerProps {
@@ -9,7 +10,7 @@ interface LanguagePickerProps {
 export function LanguagePicker({ strings, selectedLanguage, onSelect }: LanguagePickerProps) {
   return (
     <section className="step-panel" aria-labelledby="language-title">
-      <p className="eyebrow">Audience</p>
+      <p className="eyebrow">Live Translation</p>
       <h1 id="language-title">{strings.chooseLanguage}</h1>
       <p className="supporting-text">{strings.chooseLanguageHint}</p>
       <div className="language-grid">
@@ -19,9 +20,11 @@ export function LanguagePicker({ strings, selectedLanguage, onSelect }: Language
             type="button"
             className="language-button"
             data-active={language.code === selectedLanguage}
+            aria-pressed={language.code === selectedLanguage}
             onClick={() => onSelect(language.code)}
           >
-            {language.label}
+            <span>{language.label}</span>
+            {language.code === selectedLanguage ? <Check aria-hidden="true" size={20} /> : null}
           </button>
         ))}
       </div>
