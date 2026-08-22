@@ -38,7 +38,7 @@ This is a web-based live translation application that:
    - In production: uses Managed Identity assigned to the Azure Container App
 2. **Backend exposes `/api/speech-token`** — fetches a short-lived (10 min) authorization token from the Azure Speech Service token endpoint using Entra ID credentials.
 3. **Frontend (Speaker App)** calls the backend token endpoint, receives the short-lived token, and initializes the Speech SDK with `SpeechTranslationConfig.fromAuthorizationToken(token, region)`.
-4. **RBAC Role Assignment** — the developer (and the Container App managed identity) are assigned Speech RBAC on the Speech resource. For production Container Apps, `scripts/deploy-azure.ps1` also creates and assigns a least-privilege custom `Live Translation Speech Token Issuer` role containing `Microsoft.CognitiveServices/accounts/SpeechServices/issuetoken/action`, because the built-in `Cognitive Services Speech User` role does not currently include the `/sts/v1.0/issueToken` data action.
+4. **RBAC Role Assignment** — the developer (and the Container App managed identity) are assigned Speech RBAC on the Speech resource. For production Container Apps, `scripts/deploy-azure.ps1` also creates and assigns a least-privilege custom `Live Translation Speech Token Issuer` role containing `Microsoft.CognitiveServices/accounts/*/issuetoken/action`, because the built-in `Cognitive Services Speech User` role does not currently include the `/sts/v1.0/issueToken` data action. A wildcard issuetoken namespace is used because some Speech resource data planes require the `OpenAI`-namespaced issuetoken action rather than the `SpeechServices` one.
 
 ### Key Components
 

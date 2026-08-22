@@ -52,7 +52,8 @@ param(
     [string]$ContainerRegistryName,
     [string]$ContainerAppEnvironmentName,
     [string]$ContainerAppName,
-    [string]$StaticWebAppName
+    [string]$StaticWebAppName,
+    [string]$StaticWebAppLocation
 )
 
 Set-StrictMode -Version Latest
@@ -71,6 +72,23 @@ function Get-Setting {
     $envValue = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
     if (-not [string]::IsNullOrWhiteSpace($envValue)) { return $envValue }
     return $DefaultValue
+}
+
+function Import-DotEnv {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    foreach ($line in Get-Content $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) { continue }
+        $separatorIndex = $trimmed.IndexOf("=")
+        if ($separatorIndex -lt 1) { continue }
+        $name = $trimmed.Substring(0, $separatorIndex).Trim()
+        $value = $trimmed.Substring($separatorIndex + 1).Trim().Trim('"').Trim("'")
+        # Do not override values already set in the real environment.
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+            [Environment]::SetEnvironmentVariable($name, $value)
+        }
+    }
 }
 
 function Invoke-Az {
@@ -150,6 +168,7 @@ function Ensure-SpeechTokenIssuerRole {
     )
 
     $roleName = "Live Translation Speech Token Issuer"
+    $requiredDataAction = "Microsoft.CognitiveServices/accounts/*/issuetoken/action"
     $roleId = Invoke-AzText role definition list `
         --custom-role-only true `
         --query "[?roleName=='$roleName']|[0].name" `
@@ -157,6 +176,26 @@ function Ensure-SpeechTokenIssuerRole {
 
     if (-not [string]::IsNullOrWhiteSpace($roleId)) {
         Write-Host "  Custom role '$roleName' already exists."
+        # Ensure an older role (created with the narrower SpeechServices-only
+        # data action) is patched to the wildcard issuetoken action; some Speech
+        # data planes require the OpenAI-namespaced action instead.
+        $existingDataActions = Invoke-AzText role definition list `
+            --custom-role-only true `
+            --query "[?roleName=='$roleName']|[0].permissions[0].dataActions" `
+            --output json
+        if ($existingDataActions -notmatch [regex]::Escape($requiredDataAction)) {
+            Write-Host "  Updating '$roleName' data action to '$requiredDataAction'..."
+            $roleJson = (Invoke-AzText role definition list --name $roleName --output json) | ConvertFrom-Json
+            $roleObj = $roleJson[0]
+            $roleObj.permissions[0].dataActions = @($requiredDataAction)
+            $updatePath = Join-Path ([System.IO.Path]::GetTempPath()) "live-translation-speech-token-role-update.json"
+            $roleObj | ConvertTo-Json -Depth 8 | Set-Content $updatePath -Encoding UTF8
+            try {
+                Invoke-Az role definition update --role-definition $updatePath --output none
+            } finally {
+                Remove-Item $updatePath -ErrorAction SilentlyContinue
+            }
+        }
         return $roleId
     }
 
@@ -168,7 +207,9 @@ function Ensure-SpeechTokenIssuerRole {
         Description = "Allows issuing Azure AI Speech authorization tokens without access to API keys."
         Actions = @("Microsoft.CognitiveServices/accounts/read")
         NotActions = @()
-        DataActions = @("Microsoft.CognitiveServices/accounts/SpeechServices/issuetoken/action")
+        # Wildcard issuetoken namespace: the data plane on some Speech resources
+        # requires the OpenAI-namespaced issuetoken action rather than SpeechServices.
+        DataActions = @("Microsoft.CognitiveServices/accounts/*/issuetoken/action")
         NotDataActions = @()
         AssignableScopes = @($assignableScope)
     }
@@ -220,6 +261,9 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 # ---------------------------------------------------------------------------
 # Resolve parameters
 # ---------------------------------------------------------------------------
+# Load .env from the repo root so AZURE_LOCATION and other settings are honored.
+Import-DotEnv (Join-Path (Split-Path -Parent $PSScriptRoot) ".env")
+
 $Location = Get-Setting $Location "AZURE_LOCATION" "westeurope"
 $ResourceGroup = Get-Setting $ResourceGroup "AZURE_RESOURCE_GROUP" "rg-live-translation-dev"
 $SpeechResourceName = Get-Setting $SpeechResourceName "SPEECH_RESOURCE_NAME" "speech-live-translation-dev"
@@ -229,6 +273,10 @@ $ContainerRegistryName = Get-Setting $ContainerRegistryName "ACR_NAME" "acrlivet
 $ContainerAppEnvironmentName = Get-Setting $ContainerAppEnvironmentName "CONTAINER_APP_ENV_NAME" "env-live-translation-dev"
 $ContainerAppName = Get-Setting $ContainerAppName "CONTAINER_APP_NAME" "api-live-translation-dev"
 $StaticWebAppName = Get-Setting $StaticWebAppName "STATIC_WEB_APP_NAME" "web-live-translation-dev"
+# Azure Static Web Apps is only available in a limited set of regions
+# (centralus, eastus2, westus2, westeurope, eastasia). It serves content from a
+# global CDN, so its location is independent from the backend region.
+$StaticWebAppLocation = Get-Setting $StaticWebAppLocation "STATIC_WEB_APP_LOCATION" "westeurope"
 
 $ImageName = "live-translation-api"
 $ImageTag = "latest"
@@ -251,6 +299,7 @@ Write-Host "  Container Registry:   $ContainerRegistryName"
 Write-Host "  Container App Env:    $ContainerAppEnvironmentName"
 Write-Host "  Container App:        $ContainerAppName"
 Write-Host "  Static Web App:       $StaticWebAppName"
+Write-Host "  Static Web App Loc:   $StaticWebAppLocation"
 Write-Host ""
 
 # ===========================================================================
@@ -460,7 +509,7 @@ if (Test-AzResource staticwebapp show --name $StaticWebAppName --resource-group 
     Invoke-Az staticwebapp create `
         --name $StaticWebAppName `
         --resource-group $ResourceGroup `
-        --location $Location `
+        --location $StaticWebAppLocation `
         --output none
 }
 

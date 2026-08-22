@@ -34,6 +34,23 @@ function Get-Setting {
     return $DefaultValue
 }
 
+function Import-DotEnv {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    foreach ($line in Get-Content $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) { continue }
+        $separatorIndex = $trimmed.IndexOf("=")
+        if ($separatorIndex -lt 1) { continue }
+        $name = $trimmed.Substring(0, $separatorIndex).Trim()
+        $value = $trimmed.Substring($separatorIndex + 1).Trim().Trim('"').Trim("'")
+        # Do not override values already set in the real environment.
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+            [Environment]::SetEnvironmentVariable($name, $value)
+        }
+    }
+}
+
 function Invoke-Az {
     param(
         [Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)]
@@ -150,7 +167,7 @@ function Ensure-SpeechTokenIssuerRole {
         Description = "Allows issuing Azure AI Speech authorization tokens without access to API keys."
         Actions = @("Microsoft.CognitiveServices/accounts/read")
         NotActions = @()
-        DataActions = @("Microsoft.CognitiveServices/accounts/SpeechServices/issuetoken/action")
+        DataActions = @("Microsoft.CognitiveServices/accounts/*/issuetoken/action")
         NotDataActions = @()
         AssignableScopes = @($assignableScope)
     }
@@ -180,6 +197,9 @@ function Ensure-SpeechTokenIssuerRole {
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw "Azure CLI was not found. Install it from https://learn.microsoft.com/cli/azure/install-azure-cli, then run 'az login'."
 }
+
+# Load .env from the repo root so AZURE_LOCATION and other settings are honored.
+Import-DotEnv (Join-Path (Split-Path -Parent $PSScriptRoot) ".env")
 
 $Location = Get-Setting $Location "AZURE_LOCATION" "westeurope"
 $ResourceGroup = Get-Setting $ResourceGroup "AZURE_RESOURCE_GROUP" "rg-live-translation-dev"

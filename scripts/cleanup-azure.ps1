@@ -38,9 +38,29 @@ function Get-Setting {
     return $DefaultValue
 }
 
+function Import-DotEnv {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    foreach ($line in Get-Content $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) { continue }
+        $separatorIndex = $trimmed.IndexOf("=")
+        if ($separatorIndex -lt 1) { continue }
+        $name = $trimmed.Substring(0, $separatorIndex).Trim()
+        $value = $trimmed.Substring($separatorIndex + 1).Trim().Trim('"').Trim("'")
+        # Do not override values already set in the real environment.
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+            [Environment]::SetEnvironmentVariable($name, $value)
+        }
+    }
+}
+
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw "Azure CLI is required. Install from https://learn.microsoft.com/cli/azure/install-azure-cli"
 }
+
+# Load .env from the repo root so AZURE_RESOURCE_GROUP and other settings are honored.
+Import-DotEnv (Join-Path (Split-Path -Parent $PSScriptRoot) ".env")
 
 $ResourceGroup = Get-Setting $ResourceGroup "AZURE_RESOURCE_GROUP" "rg-live-translation-dev"
 
