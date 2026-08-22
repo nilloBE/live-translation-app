@@ -154,6 +154,40 @@ h1 {
   text-transform: uppercase;
 }
 
+.glossary-input {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 20px;
+  color: #18212f;
+  font-weight: 800;
+}
+
+.glossary-input textarea {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid #bdc8d6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #18212f;
+  background: #ffffff;
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  resize: vertical;
+}
+
+.glossary-input textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.glossary-hint {
+  color: #5a6675;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
 .action-row {
   display: flex;
   flex-wrap: wrap;

@@ -33,7 +33,7 @@ Authentication is handled exclusively via Microsoft Entra ID — no API keys are
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| Speaker app | `client-speaker/` | React + Vite app. Captures microphone, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, and broadcasts translated captions to the room. |
+| Speaker app | `client-speaker/` | React + Vite app. Captures microphone, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, broadcasts translated captions to the room, and supports a paste-in glossary to improve recognition of names and acronyms. |
 | Audience app | `client-audience/` | React + Vite app. Connects to the backend via Socket.IO, lets each viewer pick a target language, and displays live subtitles. |
 | Shared package | `shared/` | Caption protocol types, room normalization, language catalog, and Socket.IO client factory shared by both apps. |
 | Backend server | `server/` | Node.js + Express. Speech token broker (`/api/speech-token`), Socket.IO relay, and CORS. Runs in Docker. |
@@ -136,9 +136,12 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 1. Open the speaker app at `https://<swa-hostname>/speaker/` (or `http://localhost:5173` locally).
 2. Choose your spoken language from the source language dropdown.
 3. Select one or more target languages using the language chips.
-4. Share the generated room code with your audience (use the copy button).
-5. Click **Start** and allow microphone access when prompted.
-6. The app will begin capturing and translating your speech in real-time. Use the preview tabs to check each target language translation.
+4. (Optional) Paste domain terms, names, or acronyms into the **Glossary** box — one per line — to help the recognizer transcribe them correctly (for example `AKS`, `Contoso`, `Kubernetes`). The glossary is remembered per device.
+5. Share the generated room code with your audience (use the copy button).
+6. Click **Start** and allow microphone access when prompted.
+7. The app will begin capturing and translating your speech in real-time. Use the preview tabs to check each target language translation.
+
+> The glossary uses the Azure Speech SDK **phrase list** feature. It biases speech **recognition** toward your terms (up to 500), so acronyms and names are transcribed accurately. It does not change how those terms are translated into each target language.
 
 ### Audience (viewers)
 

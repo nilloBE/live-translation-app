@@ -26,6 +26,8 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 const defaultSpeakerSource = "fr-FR";
 const defaultSpeakerTargets = ["en", "nl", "es"];
 const fontStorageKey = "live-translation:speaker-font";
+const glossaryStorageKey = "live-translation:speaker-glossary";
+const maxGlossaryPhrases = 500;
 const captionHistoryLimit = 100;
 
 export function App() {
@@ -44,6 +46,7 @@ export function App() {
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [captionStream, setCaptionStream] = useState(createCaptionStreamState);
   const [fontIndex, setFontIndex] = useState(() => loadFontIndex());
+  const [glossaryText, setGlossaryText] = useState(() => loadGlossary());
   const sessionRef = useRef<RunningTranslationSession | null>(null);
   const speakerSocketRef = useRef<RealtimeConnection | null>(null);
   const speakerRoomRef = useRef<string | null>(null);
@@ -53,6 +56,10 @@ export function App() {
   useEffect(() => {
     writeStoredValue(fontStorageKey, String(fontIndex));
   }, [fontIndex]);
+
+  useEffect(() => {
+    writeStoredValue(glossaryStorageKey, glossaryText);
+  }, [glossaryText]);
 
   useEffect(() => {
     return () => {
@@ -94,6 +101,7 @@ export function App() {
         apiBaseUrl,
         sourceLanguage: speakerSource,
         targetLanguages: sessionTargets,
+        phrases: parseGlossary(glossaryText),
         onStatus: setSpeechStatus,
         onError: (message) => {
           setError(message);
@@ -268,6 +276,8 @@ export function App() {
           speakerTargetLanguages={speakerTargets}
           onSpeakerSourceChange={setSpeakerSource}
           onSpeakerTargetToggle={handleSpeakerTargetToggle}
+          glossaryText={glossaryText}
+          onGlossaryChange={setGlossaryText}
         />
 
         <div className="room-strip" aria-label="Current room">
@@ -348,6 +358,35 @@ function loadFontIndex() {
   } catch {
     return defaultCaptionFontScaleIndex;
   }
+}
+
+function loadGlossary() {
+  try {
+    return window.localStorage.getItem(glossaryStorageKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function parseGlossary(text: string) {
+  const seen = new Set<string>();
+  const phrases: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    phrases.push(trimmed);
+    if (phrases.length >= maxGlossaryPhrases) {
+      break;
+    }
+  }
+  return phrases;
 }
 
 function writeStoredValue(key: string, value: string) {

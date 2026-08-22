@@ -17,6 +17,8 @@ interface SessionControlsProps {
   speakerTargetLanguages?: string[];
   onSpeakerSourceChange?: (code: string) => void;
   onSpeakerTargetToggle?: (code: string) => void;
+  glossaryText?: string;
+  onGlossaryChange?: (value: string) => void;
   children?: ReactNode;
 }
 
@@ -30,38 +32,48 @@ export function SessionControls({
   speakerTargetLanguages,
   onSpeakerSourceChange,
   onSpeakerTargetToggle,
+  glossaryText,
+  onGlossaryChange,
   children,
 }: SessionControlsProps) {
   return (
-    <div className="control-bar" aria-label="Session controls">
-      <label className="room-input">
-        <span>Room code</span>
-        <span className="inline-field">
-          <input
-            value={roomInput}
-            onChange={(event) => onRoomInputChange(event.target.value)}
-            disabled={isLocked}
-            maxLength={16}
-          />
-          <button type="button" onClick={onGenerateRoom} disabled={isLocked} aria-label="Generate room code">
-            <Shuffle size={18} aria-hidden="true" />
-          </button>
-          <button type="button" onClick={onCopyRoom} aria-label="Copy room code">
-            <Copy size={18} aria-hidden="true" />
-          </button>
-        </span>
-      </label>
+    <>
+      <div className="control-bar" aria-label="Session controls">
+        <label className="room-input">
+          <span>Room code</span>
+          <span className="inline-field">
+            <input
+              value={roomInput}
+              onChange={(event) => onRoomInputChange(event.target.value)}
+              disabled={isLocked}
+              maxLength={16}
+            />
+            <button type="button" onClick={onGenerateRoom} disabled={isLocked} aria-label="Generate room code">
+              <Shuffle size={18} aria-hidden="true" />
+            </button>
+            <button type="button" onClick={onCopyRoom} aria-label="Copy room code">
+              <Copy size={18} aria-hidden="true" />
+            </button>
+          </span>
+        </label>
 
-      <SpeakerLanguageControls
-        sourceLanguage={speakerSourceLanguage ?? sourceLanguages[0].code}
-        selectedTargets={speakerTargetLanguages ?? []}
+        <SpeakerLanguageControls
+          sourceLanguage={speakerSourceLanguage ?? sourceLanguages[0].code}
+          selectedTargets={speakerTargetLanguages ?? []}
+          isLocked={isLocked}
+          onSourceChange={onSpeakerSourceChange ?? (() => {})}
+          onTargetToggle={onSpeakerTargetToggle ?? (() => {})}
+        />
+
+        {children}
+      </div>
+
+      <GlossaryControl
+        value={glossaryText ?? ""}
         isLocked={isLocked}
-        onSourceChange={onSpeakerSourceChange ?? (() => {})}
-        onTargetToggle={onSpeakerTargetToggle ?? (() => {})}
+        onChange={onGlossaryChange ?? (() => {})}
       />
-
-      {children}
-    </div>
+    </>
   );
 }
 
@@ -72,7 +84,6 @@ interface SpeakerLanguageControlsProps {
   onSourceChange: (code: string) => void;
   onTargetToggle: (code: string) => void;
 }
-
 function SpeakerLanguageControls({
   sourceLanguage,
   selectedTargets,
@@ -117,6 +128,33 @@ function SpeakerLanguageControls({
         </div>
       </fieldset>
     </>
+  );
+}
+
+interface GlossaryControlProps {
+  value: string;
+  isLocked: boolean;
+  onChange: (value: string) => void;
+}
+
+function GlossaryControl({ value, isLocked, onChange }: GlossaryControlProps) {
+  const termCount = value.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
+
+  return (
+    <label className="glossary-input">
+      <span>Glossary (one term per line)</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={isLocked}
+        rows={4}
+        spellCheck={false}
+        placeholder={"AKS\nContoso\nKubernetes"}
+      />
+      <small className="glossary-hint">
+        {termCount} / 500 terms &middot; helps recognize acronyms &amp; names
+      </small>
+    </label>
   );
 }
 

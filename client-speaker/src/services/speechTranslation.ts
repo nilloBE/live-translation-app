@@ -26,10 +26,14 @@ export interface StartTranslationOptions {
   apiBaseUrl: string;
   sourceLanguage: string;
   targetLanguages: string[];
+  phrases?: string[];
   onUpdate: (update: TranslationUpdate) => void;
   onStatus: (status: string) => void;
   onError: (message: string) => void;
 }
+
+// Phrase list bias vs. the default dictionary (0.0-2.0). Raise toward ~1.5 if terms are still missed.
+const PHRASE_LIST_WEIGHT = 1.0;
 
 export interface RunningTranslationSession {
   stop: () => Promise<void>;
@@ -49,6 +53,7 @@ export async function startTranslationSession({
   apiBaseUrl,
   sourceLanguage,
   targetLanguages: requestedTargets,
+  phrases,
   onUpdate,
   onStatus,
   onError,
@@ -71,6 +76,14 @@ export async function startTranslationSession({
   const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   const recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
   let refreshTimer: number | undefined;
+
+  if (phrases && phrases.length > 0) {
+    const phraseList = SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer);
+    for (const phrase of phrases) {
+      phraseList.addPhrase(phrase);
+    }
+    phraseList.setWeight(PHRASE_LIST_WEIGHT);
+  }
 
   recognizer.recognizing = (_sender, event) => {
     onUpdate({
