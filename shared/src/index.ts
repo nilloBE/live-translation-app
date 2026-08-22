@@ -69,8 +69,8 @@ export function reduceCaptionStream(
 }
 
 // Multipliers applied to caption text via the --caption-scale CSS custom property.
-export const captionFontScales = [0.85, 1, 1.2, 1.45, 1.75, 2.1];
-export const defaultCaptionFontScaleIndex = 1;
+export const captionFontScales = [0.5, 0.65, 0.8, 1, 1.2, 1.45, 1.75, 2.1];
+export const defaultCaptionFontScaleIndex = 3;
 
 export function clampFontScaleIndex(index: number): number {
   if (Number.isNaN(index)) {

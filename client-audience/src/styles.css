@@ -224,9 +224,7 @@ h2 {
 }
 
 .subtitle-card {
-  min-height: 200px;
-  max-height: 46vh;
-  overflow-y: auto;
+  min-height: 160px;
   display: grid;
   place-items: center;
   border: 1px solid #d8e0ea;
