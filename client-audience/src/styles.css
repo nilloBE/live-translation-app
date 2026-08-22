@@ -224,12 +224,16 @@ h2 {
 }
 
 .subtitle-card {
-  min-height: 160px;
-  display: grid;
-  place-items: center;
+  min-height: 120px;
+  max-height: 34vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
-  padding: 28px;
+  padding: 24px 28px;
   background: #f7fbf7;
   transition: border-color 200ms ease, background 200ms ease;
 }
@@ -333,27 +337,19 @@ h2 {
   background: #f8fafc;
 }
 
-.history-list span {
-  display: inline-block;
-  margin-bottom: 6px;
-  color: #0f766e;
-  font-size: 0.78rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.history-list p,
-.history-list small {
+.history-list p {
   margin: 0;
   color: #263244;
-  font-size: calc(1rem * var(--caption-scale));
-  line-height: 1.5;
+  font-size: calc(1.4rem * var(--caption-scale));
+  line-height: 1.55;
 }
 
 .history-list small {
   display: block;
-  margin-top: 6px;
+  margin-top: 8px;
   color: #66758a;
+  font-size: calc(1.05rem * var(--caption-scale));
+  line-height: 1.5;
 }
 
 @media (max-width: 640px) {

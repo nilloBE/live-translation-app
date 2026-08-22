@@ -131,9 +131,7 @@ export function LiveCaptionsView({
         {targetMissing ? (
           <p className="subtitle-text">{strings.targetUnavailable(targetName)}</p>
         ) : (
-          <p className="subtitle-text" key={liveText}>
-            {liveText || strings.waitingForCaptions}
-          </p>
+          <p className="subtitle-text">{liveText || strings.waitingForCaptions}</p>
         )}
         {liveSource ? <p className="source-text">{liveSource}</p> : null}
       </div>
@@ -148,7 +146,6 @@ export function LiveCaptionsView({
             }
             return (
               <article key={caption.id}>
-                <span>{strings.final}</span>
                 <p>{text}</p>
                 {caption.originalText ? <small>{caption.originalText}</small> : null}
               </article>
