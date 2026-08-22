@@ -25,6 +25,61 @@ export interface RoomPresence {
   audienceCount: number;
 }
 
+export interface FinalizedCaption {
+  id: string;
+  sourceLanguage: string;
+  originalText: string;
+  translations: Record<string, string>;
+  timestamp: string;
+}
+
+export interface CaptionStreamState {
+  latest: CaptionMessage | null;
+  live: CaptionMessage | null;
+  history: FinalizedCaption[];
+  seq: number;
+}
+
+export function createCaptionStreamState(): CaptionStreamState {
+  return { latest: null, live: null, history: [], seq: 0 };
+}
+
+export function reduceCaptionStream(
+  state: CaptionStreamState,
+  caption: CaptionMessage,
+  historyLimit = 100,
+): CaptionStreamState {
+  if (!caption.isFinal) {
+    return { ...state, latest: caption, live: caption };
+  }
+  const seq = state.seq + 1;
+  const finalized: FinalizedCaption = {
+    id: `caption-${seq}`,
+    sourceLanguage: caption.sourceLanguage,
+    originalText: caption.originalText,
+    translations: caption.translations,
+    timestamp: caption.timestamp,
+  };
+  return {
+    latest: caption,
+    live: null,
+    history: [...state.history, finalized].slice(-historyLimit),
+    seq,
+  };
+}
+
+// Multipliers applied to caption text via the --caption-scale CSS custom property.
+export const captionFontScales = [0.85, 1, 1.2, 1.45, 1.75, 2.1];
+export const defaultCaptionFontScaleIndex = 1;
+
+export function clampFontScaleIndex(index: number): number {
+  if (Number.isNaN(index)) {
+    return defaultCaptionFontScaleIndex;
+  }
+  return Math.min(Math.max(Math.round(index), 0), captionFontScales.length - 1);
+}
+
+
 interface ServerToClientEvents {
   caption: (caption: CaptionMessage) => void;
   "room-presence": (presence: RoomPresence) => void;

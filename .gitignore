@@ -47,3 +47,6 @@ Thumbs.db
 # Docker and local runtime
 .docker/
 docker-compose.override.yml
+
+# Local planning notes - not synced to GitHub
+improvements.md

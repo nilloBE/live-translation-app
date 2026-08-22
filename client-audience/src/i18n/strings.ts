@@ -23,6 +23,9 @@ export interface AudienceStrings {
   recentCaptions: string;
   final: string;
   live: string;
+  fontSize: string;
+  increaseFont: string;
+  decreaseFont: string;
   connectedViewers: (count: number) => string;
 }
 
@@ -56,6 +59,9 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     recentCaptions: "Sous-titres récents",
     final: "Final",
     live: "Direct",
+    fontSize: "Taille du texte",
+    increaseFont: "Agrandir le texte",
+    decreaseFont: "Réduire le texte",
     connectedViewers: (count) => `${count} connecté${count === 1 ? "" : "s"}`,
   },
   nl: {
@@ -81,6 +87,9 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     recentCaptions: "Recente ondertitels",
     final: "Definitief",
     live: "Live",
+    fontSize: "Tekstgrootte",
+    increaseFont: "Tekst vergroten",
+    decreaseFont: "Tekst verkleinen",
     connectedViewers: (count) => `${count} verbonden`,
   },
   en: {
@@ -106,6 +115,9 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     recentCaptions: "Recent captions",
     final: "Final",
     live: "Live",
+    fontSize: "Text size",
+    increaseFont: "Increase text size",
+    decreaseFont: "Decrease text size",
     connectedViewers: (count) => `${count} connected`,
   },
 };

@@ -1,5 +1,12 @@
 import { Languages, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  captionFontScales,
+  clampFontScaleIndex,
+  createCaptionStreamState,
+  defaultCaptionFontScaleIndex,
+  reduceCaptionStream,
+} from "@live-translation/shared";
 import { SessionControls } from "./components/SessionControls";
 import { SpeakerView } from "./components/SpeakerView";
 import {
@@ -18,6 +25,8 @@ import {
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 const defaultSpeakerSource = "fr-FR";
 const defaultSpeakerTargets = ["en", "nl", "es"];
+const fontStorageKey = "live-translation:speaker-font";
+const captionHistoryLimit = 100;
 
 export function App() {
   const [roomInput, setRoomInput] = useState(() => generateRoomCode());
@@ -33,11 +42,17 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [originalText, setOriginalText] = useState("");
   const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [captionStream, setCaptionStream] = useState(createCaptionStreamState);
+  const [fontIndex, setFontIndex] = useState(() => loadFontIndex());
   const sessionRef = useRef<RunningTranslationSession | null>(null);
   const speakerSocketRef = useRef<RealtimeConnection | null>(null);
   const speakerRoomRef = useRef<string | null>(null);
 
   const roomId = useMemo(() => normalizeRoomId(roomInput), [roomInput]);
+
+  useEffect(() => {
+    writeStoredValue(fontStorageKey, String(fontIndex));
+  }, [fontIndex]);
 
   useEffect(() => {
     return () => {
@@ -92,7 +107,7 @@ export function App() {
             setTranslations(update.translations);
           }
 
-          publishCaption({
+          const caption: CaptionMessage = {
             roomId,
             sourceLanguage: speakerSource,
             availableTargets: sessionTargets,
@@ -100,7 +115,13 @@ export function App() {
             translations: update.translations,
             isFinal: update.reason === "recognized",
             timestamp: new Date().toISOString(),
-          });
+          };
+
+          if (Object.keys(update.translations).length > 0) {
+            setCaptionStream((current) => reduceCaptionStream(current, caption, captionHistoryLimit));
+          }
+
+          publishCaption(caption);
         },
       });
       setIsListening(true);
@@ -210,7 +231,16 @@ export function App() {
   function clearSpeakerTranscript() {
     setOriginalText("");
     setTranslations({});
+    setCaptionStream(createCaptionStreamState());
     setNotice("Speaker transcript cleared");
+  }
+
+  function handleIncreaseFont() {
+    setFontIndex((current) => clampFontScaleIndex(current + 1));
+  }
+
+  function handleDecreaseFont() {
+    setFontIndex((current) => clampFontScaleIndex(current - 1));
   }
 
   const controlsLocked = isListening || isBusy;
@@ -259,6 +289,12 @@ export function App() {
           onPreviewTargetChange={setPreviewTarget}
           originalText={originalText}
           translations={translations}
+          history={captionStream.history}
+          fontScale={captionFontScales[fontIndex]}
+          canDecreaseFont={fontIndex > 0}
+          canIncreaseFont={fontIndex < captionFontScales.length - 1}
+          onIncreaseFont={handleIncreaseFont}
+          onDecreaseFont={handleDecreaseFont}
           isListening={isListening}
           isBusy={isBusy}
           speechStatus={speechStatus}
@@ -303,4 +339,21 @@ function generateRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const randomPart = Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   return `LIVE-${randomPart}`;
+}
+
+function loadFontIndex() {
+  try {
+    const stored = window.localStorage.getItem(fontStorageKey);
+    return stored === null ? defaultCaptionFontScaleIndex : clampFontScaleIndex(Number(stored));
+  } catch {
+    return defaultCaptionFontScaleIndex;
+  }
+}
+
+function writeStoredValue(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage errors in private browsing modes.
+  }
 }

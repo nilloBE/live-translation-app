@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  captionFontScales,
+  clampFontScaleIndex,
+  createCaptionStreamState,
+  defaultCaptionFontScaleIndex,
   createRealtimeConnection,
   normalizeRoomId,
-  type CaptionMessage,
+  reduceCaptionStream,
   type RealtimeConnection,
 } from "@live-translation/shared";
 import { LanguagePicker } from "./components/LanguagePicker";
@@ -14,6 +18,8 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 const uiLanguageStorageKey = "live-translation:audience-ui-lang";
 const roomStorageKey = "live-translation:audience-room";
 const targetStorageKey = "live-translation:audience-target";
+const fontStorageKey = "live-translation:audience-font";
+const captionHistoryLimit = 100;
 
 type AudienceStep = "language" | "room" | "live";
 type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnected" | "failed";
@@ -22,15 +28,16 @@ export function App() {
   const [uiLanguage, setUiLanguage] = useState<UiLanguage | null>(() => loadUiLanguage());
   const [step, setStep] = useState<AudienceStep>(() => (loadUiLanguage() ? "room" : "language"));
   const [roomInput, setRoomInput] = useState(() => loadStoredValue(roomStorageKey) || "LIVE");
-  const [captions, setCaptions] = useState<CaptionMessage[]>([]);
+  const [captionStream, setCaptionStream] = useState(createCaptionStreamState);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("disconnected");
   const [audienceCount, setAudienceCount] = useState(0);
   const [selectedTarget, setSelectedTarget] = useState(() => loadStoredValue(targetStorageKey) || defaultTargetForLanguage(loadUiLanguage()));
+  const [fontIndex, setFontIndex] = useState(() => loadFontIndex());
   const socketRef = useRef<RealtimeConnection | null>(null);
 
   const activeStrings = strings[uiLanguage ?? "en"];
   const roomId = useMemo(() => normalizeRoomId(roomInput), [roomInput]);
-  const latestCaption = captions.length > 0 ? captions[captions.length - 1] : undefined;
+  const latestCaption = captionStream.latest ?? undefined;
   const targetOptions = useMemo(() => buildTargetOptions(latestCaption), [latestCaption]);
 
   useEffect(() => {
@@ -48,6 +55,10 @@ export function App() {
   }, [selectedTarget]);
 
   useEffect(() => {
+    writeStoredValue(fontStorageKey, String(fontIndex));
+  }, [fontIndex]);
+
+  useEffect(() => {
     if (targetOptions.includes(selectedTarget)) {
       return;
     }
@@ -63,7 +74,7 @@ export function App() {
     const socket = createRealtimeConnection(apiBaseUrl);
     socketRef.current = socket;
     setConnectionStatus("connecting");
-    setCaptions([]);
+    setCaptionStream(createCaptionStreamState());
 
     socket.on("connect", () => {
       socket.emit("join-room", roomId, (presence) => {
@@ -87,7 +98,7 @@ export function App() {
     });
 
     socket.on("caption", (caption) => {
-      setCaptions((currentCaptions) => [...currentCaptions, caption].slice(-20));
+      setCaptionStream((current) => reduceCaptionStream(current, caption, captionHistoryLimit));
     });
 
     socket.connect();
@@ -120,7 +131,15 @@ export function App() {
 
   function handleLeaveRoom() {
     setStep("room");
-    setCaptions([]);
+    setCaptionStream(createCaptionStreamState());
+  }
+
+  function handleIncreaseFont() {
+    setFontIndex((current) => clampFontScaleIndex(current + 1));
+  }
+
+  function handleDecreaseFont() {
+    setFontIndex((current) => clampFontScaleIndex(current - 1));
   }
 
   function handleChangeLanguage() {
@@ -150,13 +169,20 @@ export function App() {
       {step === "live" ? (
         <LiveCaptionsView
           roomId={roomId}
-          captions={captions}
+          live={captionStream.live}
+          latestCaption={latestCaption}
+          history={captionStream.history}
           connectionStatus={connectionStatus}
           audienceCount={audienceCount}
           selectedTarget={selectedTarget}
           targetOptions={targetOptions}
+          fontScale={captionFontScales[fontIndex]}
+          canDecreaseFont={fontIndex > 0}
+          canIncreaseFont={fontIndex < captionFontScales.length - 1}
           strings={activeStrings}
           onSelectedTargetChange={setSelectedTarget}
+          onIncreaseFont={handleIncreaseFont}
+          onDecreaseFont={handleDecreaseFont}
           onLeaveRoom={handleLeaveRoom}
           onChangeLanguage={handleChangeLanguage}
         />
@@ -175,6 +201,11 @@ function loadUiLanguage(): UiLanguage | null {
 
 function defaultTargetForLanguage(language: UiLanguage | null) {
   return uiLanguages.find((entry) => entry.code === language)?.targetCode ?? "en";
+}
+
+function loadFontIndex() {
+  const stored = loadStoredValue(fontStorageKey);
+  return stored === null ? defaultCaptionFontScaleIndex : clampFontScaleIndex(Number(stored));
 }
 
 function loadStoredValue(key: string) {

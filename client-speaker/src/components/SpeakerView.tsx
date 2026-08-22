@@ -1,4 +1,5 @@
 import { Eraser, Mic, MicOff, Radio, Square } from "lucide-react";
+import type { FinalizedCaption } from "@live-translation/shared";
 import { StatusBadge } from "./StatusBadge";
 import {
   getSourceLanguageName,
@@ -12,6 +13,12 @@ interface SpeakerViewProps {
   onPreviewTargetChange: (code: string) => void;
   originalText: string;
   translations: Record<string, string>;
+  history: FinalizedCaption[];
+  fontScale: number;
+  canDecreaseFont: boolean;
+  canIncreaseFont: boolean;
+  onIncreaseFont: () => void;
+  onDecreaseFont: () => void;
   isListening: boolean;
   isBusy: boolean;
   speechStatus: string;
@@ -29,6 +36,12 @@ export function SpeakerView({
   onPreviewTargetChange,
   originalText,
   translations,
+  history,
+  fontScale,
+  canDecreaseFont,
+  canIncreaseFont,
+  onIncreaseFont,
+  onDecreaseFont,
   isListening,
   isBusy,
   speechStatus,
@@ -57,6 +70,15 @@ export function SpeakerView({
           <Eraser size={18} aria-hidden="true" />
           Clear
         </button>
+        <div className="font-controls" role="group" aria-label="Text size">
+          <span aria-hidden="true">Text size</span>
+          <button type="button" onClick={onDecreaseFont} disabled={!canDecreaseFont} aria-label="Decrease text size">
+            A-
+          </button>
+          <button type="button" onClick={onIncreaseFont} disabled={!canIncreaseFont} aria-label="Increase text size">
+            A+
+          </button>
+        </div>
       </div>
 
       <div className="status-grid" aria-label="Speaker status">
@@ -65,13 +87,19 @@ export function SpeakerView({
         <StatusBadge icon={Radio} label={`${audienceCount} connected`} state={audienceCount > 0 ? "active" : "idle"} />
       </div>
 
-      <section className="transcript-grid" aria-label="Live translation transcript">
+      <section
+        className="transcript-grid"
+        aria-label="Live translation transcript"
+        style={{ "--caption-scale": fontScale } as React.CSSProperties}
+      >
         <article className="transcript-panel">
           <div className="transcript-heading">
             <span>{getSourceLanguageName(sourceLanguage)}</span>
             <code>{sourceLanguage}</code>
           </div>
-          <p>{originalText || "Waiting for speech"}</p>
+          <p className="transcript-live" data-live={isListening}>
+            {originalText || "Waiting for speech"}
+          </p>
         </article>
 
         <article className="transcript-panel translated-panel">
@@ -93,9 +121,32 @@ export function SpeakerView({
               ))}
             </div>
           ) : null}
-          <p>{(activePreview && translations[activePreview]) || "Waiting for translation"}</p>
+          <p className="transcript-live" data-live={isListening}>
+            {(activePreview && translations[activePreview]) || "Waiting for translation"}
+          </p>
         </article>
       </section>
+
+      {history.length > 0 ? (
+        <section className="transcript-history" aria-label="Finalized transcript history">
+          <h2>History</h2>
+          <div className="transcript-history-list" style={{ "--caption-scale": fontScale } as React.CSSProperties}>
+            {history.map((caption) => {
+              const text = activePreview ? caption.translations[activePreview] : "";
+              if (!text) {
+                return null;
+              }
+              return (
+                <article key={caption.id}>
+                  <p>{text}</p>
+                  {caption.originalText ? <small>{caption.originalText}</small> : null}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }
+

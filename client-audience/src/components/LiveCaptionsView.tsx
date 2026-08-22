@@ -4,48 +4,82 @@ import {
   getTargetLanguageName,
   targetLanguages,
   type CaptionMessage,
+  type FinalizedCaption,
 } from "@live-translation/shared";
 import type { AudienceStrings } from "../i18n/strings";
 
 interface LiveCaptionsViewProps {
   roomId: string;
-  captions: CaptionMessage[];
+  live: CaptionMessage | null;
+  latestCaption: CaptionMessage | undefined;
+  history: FinalizedCaption[];
   connectionStatus: "connecting" | "connected" | "reconnecting" | "disconnected" | "failed";
   audienceCount: number;
   selectedTarget: string;
   targetOptions: string[];
+  fontScale: number;
+  canDecreaseFont: boolean;
+  canIncreaseFont: boolean;
   strings: AudienceStrings;
   onSelectedTargetChange: (target: string) => void;
+  onIncreaseFont: () => void;
+  onDecreaseFont: () => void;
   onLeaveRoom: () => void;
   onChangeLanguage: () => void;
 }
 
 export function LiveCaptionsView({
   roomId,
-  captions,
+  live,
+  latestCaption,
+  history,
   connectionStatus,
   audienceCount,
   selectedTarget,
   targetOptions,
+  fontScale,
+  canDecreaseFont,
+  canIncreaseFont,
   strings,
   onSelectedTargetChange,
+  onIncreaseFont,
+  onDecreaseFont,
   onLeaveRoom,
   onChangeLanguage,
 }: LiveCaptionsViewProps) {
-  const latestCaption = captions.length > 0 ? captions[captions.length - 1] : undefined;
-  const finalCaptions = captions.filter((caption) => caption.isFinal).slice(-10);
   const historyRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
+
+  const lastFinal = history.length > 0 ? history[history.length - 1] : undefined;
+  const liveText = live?.translations[selectedTarget] ?? lastFinal?.translations[selectedTarget] ?? "";
+  const liveSource = live?.originalText ?? lastFinal?.originalText ?? "";
+  const targetName = getTargetLanguageName(selectedTarget);
+  const targetMissing =
+    latestCaption !== undefined &&
+    latestCaption.availableTargets.length > 0 &&
+    !latestCaption.availableTargets.includes(selectedTarget);
 
   useEffect(() => {
-    historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight, behavior: "smooth" });
-  }, [captions, selectedTarget]);
+    if (stickToBottomRef.current) {
+      historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [history, selectedTarget]);
 
-  const latestText = latestCaption?.translations[selectedTarget] ?? "";
-  const targetName = getTargetLanguageName(selectedTarget);
-  const targetMissing = latestCaption !== undefined && latestCaption.availableTargets.length > 0 && !latestCaption.availableTargets.includes(selectedTarget);
+  function handleHistoryScroll() {
+    const element = historyRef.current;
+    if (!element) {
+      return;
+    }
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 48;
+  }
 
   return (
-    <section className="live-shell" aria-label={strings.appName}>
+    <section
+      className="live-shell"
+      aria-label={strings.appName}
+      style={{ "--caption-scale": fontScale } as React.CSSProperties}
+    >
       <header className="live-header">
         <div>
           <p className="eyebrow">{strings.appName}</p>
@@ -70,37 +104,51 @@ export function LiveCaptionsView({
         />
       </div>
 
-      <label className="target-select">
-        <span>{strings.readIn}</span>
-        <select value={selectedTarget} onChange={(event) => onSelectedTargetChange(event.target.value)}>
-          {targetOptions.map((code) => (
-            <option key={code} value={code}>
-              {getTargetLanguageName(code)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="caption-toolbar">
+        <label className="target-select">
+          <span>{strings.readIn}</span>
+          <select value={selectedTarget} onChange={(event) => onSelectedTargetChange(event.target.value)}>
+            {targetOptions.map((code) => (
+              <option key={code} value={code}>
+                {getTargetLanguageName(code)}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <div className="subtitle-card" aria-live="polite" aria-atomic="true">
+        <div className="font-controls" role="group" aria-label={strings.fontSize}>
+          <span aria-hidden="true">{strings.fontSize}</span>
+          <button type="button" onClick={onDecreaseFont} disabled={!canDecreaseFont} aria-label={strings.decreaseFont}>
+            A-
+          </button>
+          <button type="button" onClick={onIncreaseFont} disabled={!canIncreaseFont} aria-label={strings.increaseFont}>
+            A+
+          </button>
+        </div>
+      </div>
+
+      <div className="subtitle-card" data-live={live !== null} aria-live="polite" aria-atomic="true">
         {targetMissing ? (
           <p className="subtitle-text">{strings.targetUnavailable(targetName)}</p>
         ) : (
-          <p className="subtitle-text">{latestText || strings.waitingForCaptions}</p>
+          <p className="subtitle-text" key={liveText}>
+            {liveText || strings.waitingForCaptions}
+          </p>
         )}
-        {latestCaption?.originalText ? <p className="source-text">{latestCaption.originalText}</p> : null}
+        {liveSource ? <p className="source-text">{liveSource}</p> : null}
       </div>
 
       <section className="caption-history" aria-labelledby="history-title">
         <h2 id="history-title">{strings.recentCaptions}</h2>
-        <div className="history-list" ref={historyRef}>
-          {finalCaptions.map((caption) => {
+        <div className="history-list" ref={historyRef} onScroll={handleHistoryScroll}>
+          {history.map((caption) => {
             const text = caption.translations[selectedTarget];
             if (!text) {
               return null;
             }
             return (
-              <article key={`${caption.timestamp}-${text}`}>
-                <span>{caption.isFinal ? strings.final : strings.live}</span>
+              <article key={caption.id}>
+                <span>{strings.final}</span>
                 <p>{text}</p>
                 {caption.originalText ? <small>{caption.originalText}</small> : null}
               </article>
