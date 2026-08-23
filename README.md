@@ -33,8 +33,8 @@ Authentication is handled exclusively via Microsoft Entra ID — no API keys are
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| Speaker app | `client-speaker/` | React + Vite app. Captures microphone, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, broadcasts translated captions to the room, and supports a paste-in glossary to improve recognition of names and acronyms. |
-| Audience app | `client-audience/` | React + Vite app. Connects to the backend via Socket.IO, lets each viewer pick a target language, and displays live subtitles. |
+| Speaker app | `client-speaker/` | Responsive React + Vite console. Captures microphone audio, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, broadcasts translated captions to the room, and supports a paste-in glossary to improve recognition of names and acronyms. Includes caption sizing and system, light, and dark themes. |
+| Audience app | `client-audience/` | Mobile-first React + Vite viewer. Connects to the backend via Socket.IO, lets each viewer pick a target language, and displays live subtitles with connection status, recent-caption history, adjustable text size, and system, light, and dark themes. |
 | Shared package | `shared/` | Caption protocol types, room normalization, language catalog, and Socket.IO client factory shared by both apps. |
 | Backend server | `server/` | Node.js + Express. Speech token broker (`/api/speech-token`), Socket.IO relay, and CORS. Runs in Docker. |
 
@@ -140,6 +140,7 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 5. Share the generated room code with your audience (use the copy button).
 6. Click **Start** and allow microphone access when prompted.
 7. The app will begin capturing and translating your speech in real-time. Use the preview tabs to check each target language translation.
+8. Use the display controls to adjust caption size or follow the system, light, or dark theme. These settings are remembered on the device.
 
 > The glossary uses the Azure Speech SDK **phrase list** feature. It biases speech **recognition** toward your terms (up to 500), so acronyms and names are transcribed accurately. It does not change how those terms are translated into each target language.
 
@@ -150,8 +151,9 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 3. Enter the room code shared by the speaker.
 4. Choose the language you want to read from the **Read in** selector.
 5. Translated captions appear live and auto-scroll as the speaker talks.
+6. Adjust the text size or choose the system, light, or dark theme as needed. Scroll through recent captions and use **Return to live** to resume following the latest subtitle.
 
-Audience language preference and room code are remembered between visits.
+The audience app is designed for phone, tablet, and desktop screens. It shows connection and speaker-language status, reconnects automatically after transient network interruptions, and remembers the UI language, room code, caption language, text size, and theme between visits.
 
 ## Local Development
 
