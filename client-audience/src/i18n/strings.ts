@@ -7,6 +7,7 @@ export interface AudienceStrings {
   connectToRoom: string;
   roomCodeLabel: string;
   roomCodePlaceholder: string;
+  roomCodeHint: string;
   connect: string;
   changeLanguage: string;
   leaveRoom: string;
@@ -21,12 +22,18 @@ export interface AudienceStrings {
   waitingForCaptions: string;
   targetUnavailable: (language: string) => string;
   recentCaptions: string;
+  returnToLive: string;
   final: string;
   live: string;
   fontSize: string;
   increaseFont: string;
   decreaseFont: string;
+  theme: string;
+  systemTheme: string;
+  lightTheme: string;
+  darkTheme: string;
   connectedViewers: (count: number) => string;
+  status: string;
 }
 
 export const uiLanguages: Array<{ code: UiLanguage; label: string; targetCode: string }> = [
@@ -43,6 +50,7 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     connectToRoom: "Rejoindre une salle",
     roomCodeLabel: "Code de salle",
     roomCodePlaceholder: "LIVE-ABCD",
+    roomCodeHint: "Saisissez le code affiché par l'orateur.",
     connect: "Se connecter",
     changeLanguage: "Changer de langue",
     leaveRoom: "Quitter la salle",
@@ -57,12 +65,18 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     waitingForCaptions: "En attente des sous-titres",
     targetUnavailable: (language) => `L'orateur ne diffuse pas ${language} pour le moment.`,
     recentCaptions: "Sous-titres récents",
+    returnToLive: "Revenir au direct",
     final: "Final",
     live: "Direct",
     fontSize: "Taille du texte",
     increaseFont: "Agrandir le texte",
     decreaseFont: "Réduire le texte",
+    theme: "Thème",
+    systemTheme: "Système",
+    lightTheme: "Clair",
+    darkTheme: "Sombre",
     connectedViewers: (count) => `${count} connecté${count === 1 ? "" : "s"}`,
+    status: "État",
   },
   nl: {
     appName: "Live ondertitels",
@@ -71,6 +85,7 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     connectToRoom: "Ga naar een ruimte",
     roomCodeLabel: "Ruimtecode",
     roomCodePlaceholder: "LIVE-ABCD",
+    roomCodeHint: "Voer de code in die de spreker toont.",
     connect: "Verbinden",
     changeLanguage: "Taal wijzigen",
     leaveRoom: "Ruimte verlaten",
@@ -85,12 +100,18 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     waitingForCaptions: "Wachten op ondertitels",
     targetUnavailable: (language) => `De spreker zendt momenteel geen ${language} uit.`,
     recentCaptions: "Recente ondertitels",
+    returnToLive: "Terug naar live",
     final: "Definitief",
     live: "Live",
     fontSize: "Tekstgrootte",
     increaseFont: "Tekst vergroten",
     decreaseFont: "Tekst verkleinen",
+    theme: "Thema",
+    systemTheme: "Systeem",
+    lightTheme: "Licht",
+    darkTheme: "Donker",
     connectedViewers: (count) => `${count} verbonden`,
+    status: "Status",
   },
   en: {
     appName: "Live captions",
@@ -99,6 +120,7 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     connectToRoom: "Join a room",
     roomCodeLabel: "Room code",
     roomCodePlaceholder: "LIVE-ABCD",
+    roomCodeHint: "Enter the code shown by the speaker.",
     connect: "Connect",
     changeLanguage: "Change language",
     leaveRoom: "Leave room",
@@ -113,11 +135,17 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     waitingForCaptions: "Waiting for captions",
     targetUnavailable: (language) => `The speaker is not broadcasting ${language} right now.`,
     recentCaptions: "Recent captions",
+    returnToLive: "Return to live",
     final: "Final",
     live: "Live",
     fontSize: "Text size",
     increaseFont: "Increase text size",
     decreaseFont: "Decrease text size",
+    theme: "Theme",
+    systemTheme: "System",
+    lightTheme: "Light",
+    darkTheme: "Dark",
     connectedViewers: (count) => `${count} connected`,
+    status: "Status",
   },
 };

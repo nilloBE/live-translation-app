@@ -1,4 +1,4 @@
-import { Languages, Send } from "lucide-react";
+import { Languages, Monitor, Moon, Send, Sun } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   captionFontScales,
@@ -27,8 +27,10 @@ const defaultSpeakerSource = "fr-FR";
 const defaultSpeakerTargets = ["en", "nl", "es"];
 const fontStorageKey = "live-translation:speaker-font";
 const glossaryStorageKey = "live-translation:speaker-glossary";
+const themeStorageKey = "live-translation:speaker-theme";
 const maxGlossaryPhrases = 500;
 const captionHistoryLimit = 100;
+type ThemePreference = "system" | "light" | "dark";
 
 export function App() {
   const [roomInput, setRoomInput] = useState(() => generateRoomCode());
@@ -47,6 +49,7 @@ export function App() {
   const [captionStream, setCaptionStream] = useState(createCaptionStreamState);
   const [fontIndex, setFontIndex] = useState(() => loadFontIndex());
   const [glossaryText, setGlossaryText] = useState(() => loadGlossary());
+  const [theme, setTheme] = useState<ThemePreference>(loadTheme);
   const sessionRef = useRef<RunningTranslationSession | null>(null);
   const speakerSocketRef = useRef<RealtimeConnection | null>(null);
   const speakerRoomRef = useRef<string | null>(null);
@@ -60,6 +63,15 @@ export function App() {
   useEffect(() => {
     writeStoredValue(glossaryStorageKey, glossaryText);
   }, [glossaryText]);
+
+  useEffect(() => {
+    writeStoredValue(themeStorageKey, theme);
+    if (theme === "system") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.dataset.theme = theme;
+    }
+  }, [theme]);
 
   useEffect(() => {
     return () => {
@@ -264,6 +276,17 @@ export function App() {
             <p className="eyebrow">Speaker console</p>
             <h1 id="app-title">Live Translation App</h1>
           </div>
+          <div className="theme-controls" role="group" aria-label="Theme">
+            <ThemeButton label="Use system theme" active={theme === "system"} onClick={() => setTheme("system")}>
+              <Monitor aria-hidden="true" size={18} />
+            </ThemeButton>
+            <ThemeButton label="Use light theme" active={theme === "light"} onClick={() => setTheme("light")}>
+              <Sun aria-hidden="true" size={18} />
+            </ThemeButton>
+            <ThemeButton label="Use dark theme" active={theme === "dark"} onClick={() => setTheme("dark")}>
+              <Moon aria-hidden="true" size={18} />
+            </ThemeButton>
+          </div>
         </div>
 
         <SessionControls
@@ -316,8 +339,8 @@ export function App() {
         />
       </section>
 
-      <section className="panel config-panel" aria-labelledby="config-title">
-        <h2 id="config-title">Local Configuration</h2>
+      <details className="panel config-panel">
+        <summary id="config-title">Local configuration</summary>
         <dl>
           <div>
             <dt>Backend API</dt>
@@ -340,8 +363,33 @@ export function App() {
             <dd>Microsoft Entra ID via Azure CLI locally and managed identity in Azure</dd>
           </div>
         </dl>
-      </section>
+      </details>
     </main>
+  );
+}
+
+function ThemeButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      data-active={active}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -365,6 +413,15 @@ function loadGlossary() {
     return window.localStorage.getItem(glossaryStorageKey) ?? "";
   } catch {
     return "";
+  }
+}
+
+function loadTheme(): ThemePreference {
+  try {
+    const stored = window.localStorage.getItem(themeStorageKey);
+    return stored === "light" || stored === "dark" ? stored : "system";
+  } catch {
+    return "system";
   }
 }
 

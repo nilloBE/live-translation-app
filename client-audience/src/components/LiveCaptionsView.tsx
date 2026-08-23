@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getSourceLanguageName,
   getTargetLanguageName,
@@ -6,6 +6,8 @@ import {
   type CaptionMessage,
   type FinalizedCaption,
 } from "@live-translation/shared";
+import { ArrowDown, Languages, LogOut, Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
+import type { ThemePreference } from "../hooks/useAudiencePreferences";
 import type { AudienceStrings } from "../i18n/strings";
 
 interface LiveCaptionsViewProps {
@@ -20,10 +22,12 @@ interface LiveCaptionsViewProps {
   fontScale: number;
   canDecreaseFont: boolean;
   canIncreaseFont: boolean;
+  theme: ThemePreference;
   strings: AudienceStrings;
   onSelectedTargetChange: (target: string) => void;
   onIncreaseFont: () => void;
   onDecreaseFont: () => void;
+  onThemeChange: (theme: ThemePreference) => void;
   onLeaveRoom: () => void;
   onChangeLanguage: () => void;
 }
@@ -40,15 +44,18 @@ export function LiveCaptionsView({
   fontScale,
   canDecreaseFont,
   canIncreaseFont,
+  theme,
   strings,
   onSelectedTargetChange,
   onIncreaseFont,
   onDecreaseFont,
+  onThemeChange,
   onLeaveRoom,
   onChangeLanguage,
 }: LiveCaptionsViewProps) {
   const historyRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+  const [isFollowingLive, setIsFollowingLive] = useState(true);
 
   const lastFinal = history.length > 0 ? history[history.length - 1] : undefined;
   const liveText = live?.translations[selectedTarget] ?? lastFinal?.translations[selectedTarget] ?? "";
@@ -72,6 +79,13 @@ export function LiveCaptionsView({
     }
     const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
     stickToBottomRef.current = distanceFromBottom < 48;
+    setIsFollowingLive(stickToBottomRef.current);
+  }
+
+  function returnToLive() {
+    stickToBottomRef.current = true;
+    setIsFollowingLive(true);
+    historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight });
   }
 
   return (
@@ -87,15 +101,17 @@ export function LiveCaptionsView({
         </div>
         <div className="header-actions">
           <button className="secondary-action" type="button" onClick={onChangeLanguage}>
-            {strings.changeLanguage}
+            <Languages aria-hidden="true" size={18} />
+            <span>{strings.changeLanguage}</span>
           </button>
           <button className="secondary-action" type="button" onClick={onLeaveRoom}>
-            {strings.leaveRoom}
+            <LogOut aria-hidden="true" size={18} />
+            <span>{strings.leaveRoom}</span>
           </button>
         </div>
       </header>
 
-      <div className="status-strip" aria-label="Status">
+      <div className="status-strip" aria-label={strings.status}>
         <StatusPill label={statusLabel(connectionStatus, strings)} state={connectionStatus} />
         <StatusPill label={strings.connectedViewers(audienceCount)} state={audienceCount > 0 ? "connected" : "disconnected"} />
         <StatusPill
@@ -119,11 +135,35 @@ export function LiveCaptionsView({
         <div className="font-controls" role="group" aria-label={strings.fontSize}>
           <span aria-hidden="true">{strings.fontSize}</span>
           <button type="button" onClick={onDecreaseFont} disabled={!canDecreaseFont} aria-label={strings.decreaseFont}>
-            A-
+            <Minus aria-hidden="true" size={18} />
           </button>
           <button type="button" onClick={onIncreaseFont} disabled={!canIncreaseFont} aria-label={strings.increaseFont}>
-            A+
+            <Plus aria-hidden="true" size={18} />
           </button>
+        </div>
+
+        <div className="theme-controls" role="group" aria-label={strings.theme}>
+          <ThemeButton
+            label={strings.systemTheme}
+            active={theme === "system"}
+            onClick={() => onThemeChange("system")}
+          >
+            <Monitor aria-hidden="true" size={18} />
+          </ThemeButton>
+          <ThemeButton
+            label={strings.lightTheme}
+            active={theme === "light"}
+            onClick={() => onThemeChange("light")}
+          >
+            <Sun aria-hidden="true" size={18} />
+          </ThemeButton>
+          <ThemeButton
+            label={strings.darkTheme}
+            active={theme === "dark"}
+            onClick={() => onThemeChange("dark")}
+          >
+            <Moon aria-hidden="true" size={18} />
+          </ThemeButton>
         </div>
       </div>
 
@@ -137,7 +177,15 @@ export function LiveCaptionsView({
       </div>
 
       <section className="caption-history" aria-labelledby="history-title">
-        <h2 id="history-title">{strings.recentCaptions}</h2>
+        <div className="history-heading">
+          <h2 id="history-title">{strings.recentCaptions}</h2>
+          {!isFollowingLive && history.length > 0 ? (
+            <button className="return-live" type="button" onClick={returnToLive}>
+              <ArrowDown aria-hidden="true" size={16} />
+              <span>{strings.returnToLive}</span>
+            </button>
+          ) : null}
+        </div>
         <div className="history-list" ref={historyRef} onScroll={handleHistoryScroll}>
           {history.map((caption) => {
             const text = caption.translations[selectedTarget];
@@ -154,6 +202,31 @@ export function LiveCaptionsView({
         </div>
       </section>
     </section>
+  );
+}
+
+function ThemeButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      data-active={active}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
