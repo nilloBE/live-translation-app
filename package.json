@@ -6,17 +6,20 @@
   "workspaces": [
     "client-speaker",
     "client-audience",
+    "client-admin",
     "shared",
     "server"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:run --workspace @live-translation/server\" \"npm run dev --workspace @live-translation/client-speaker\" \"npm run dev --workspace @live-translation/client-audience\"",
+    "dev": "concurrently \"npm run dev:run --workspace @live-translation/server\" \"npm run dev --workspace @live-translation/client-speaker\" \"npm run dev --workspace @live-translation/client-audience\" \"npm run dev --workspace @live-translation/client-admin\"",
     "dev:server": "npm run dev --workspace @live-translation/server",
     "dev:speaker": "npm run dev --workspace @live-translation/client-speaker",
     "dev:audience": "npm run dev --workspace @live-translation/client-audience",
+    "dev:admin": "npm run dev --workspace @live-translation/client-admin",
     "build": "npm run build --workspaces --if-present",
     "build:speaker": "npm run build --workspace @live-translation/client-speaker",
     "build:audience": "npm run build --workspace @live-translation/client-audience",
+    "build:admin": "npm run build --workspace @live-translation/client-admin",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

@@ -38,6 +38,12 @@
 .PARAMETER StaticWebAppName
     Name of the Azure Static Web App. Default: web-live-translation-dev
 
+.PARAMETER AdminApiKey
+    Shared secret for the /admin monitoring dashboard (ADMIN_API_KEY on the Container App).
+    Not an Azure credential - just gates the admin dashboard. If omitted, a random key is
+    generated on every deploy and printed once at the end. Pass the same value on every
+    deploy (or set ADMIN_API_KEY in the repo-root .env) to keep the admin dashboard key stable.
+
 .EXAMPLE
     .\scripts\deploy-azure.ps1
     .\scripts\deploy-azure.ps1 -Location "northeurope" -ResourceGroup "rg-live-translation-prod"
@@ -53,7 +59,8 @@ param(
     [string]$ContainerAppEnvironmentName,
     [string]$ContainerAppName,
     [string]$StaticWebAppName,
-    [string]$StaticWebAppLocation
+    [string]$StaticWebAppLocation,
+    [string]$AdminApiKey
 )
 
 Set-StrictMode -Version Latest
@@ -278,6 +285,11 @@ $StaticWebAppName = Get-Setting $StaticWebAppName "STATIC_WEB_APP_NAME" "web-liv
 # global CDN, so its location is independent from the backend region.
 $StaticWebAppLocation = Get-Setting $StaticWebAppLocation "STATIC_WEB_APP_LOCATION" "westeurope"
 
+# Shared secret for the /admin dashboard. If not supplied via -AdminApiKey or the
+# ADMIN_API_KEY setting, generate a fresh one for this deploy and print it once at the end.
+$adminApiKeyProvided = -not [string]::IsNullOrWhiteSpace((Get-Setting $AdminApiKey "ADMIN_API_KEY" ""))
+$AdminApiKey = Get-Setting $AdminApiKey "ADMIN_API_KEY" ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
+
 $ImageName = "live-translation-api"
 $ImageTag = "latest"
 $FullImageName = "$ContainerRegistryName.azurecr.io/${ImageName}:${ImageTag}"
@@ -415,6 +427,8 @@ if ([string]::IsNullOrWhiteSpace($swaHostname)) {
     $corsOrigins = "*"
 }
 
+# min-replicas is 1 (not 0) so the container isn't cold-started by the first
+# connection of a live event; see docs/scaling-plan.md.
 if (Test-AzResource containerapp show --name $ContainerAppName --resource-group $ResourceGroup) {
     Write-Host "  Updating existing Container App..."
     Invoke-Az containerapp update `
@@ -427,6 +441,14 @@ if (Test-AzResource containerapp show --name $ContainerAppName --resource-group 
             "SPEECH_REGION=$Location" `
             "SPEECH_ENDPOINT=https://$SpeechCustomDomain.cognitiveservices.azure.com" `
             "CORS_ORIGIN=$corsOrigins" `
+            "ADMIN_API_KEY=secretref:admin-api-key" `
+        --min-replicas 1 `
+        --max-replicas 2 `
+        --output none
+    Invoke-Az containerapp secret set `
+        --name $ContainerAppName `
+        --resource-group $ResourceGroup `
+        --secrets "admin-api-key=$AdminApiKey" `
         --output none
 } else {
     Write-Host "  Creating new Container App..."
@@ -440,13 +462,15 @@ if (Test-AzResource containerapp show --name $ContainerAppName --resource-group 
         --target-port 3001 `
         --ingress external `
         --system-assigned `
+        --secrets "admin-api-key=$AdminApiKey" `
         --env-vars `
             "NODE_ENV=production" `
             "PORT=3001" `
             "SPEECH_REGION=$Location" `
             "SPEECH_ENDPOINT=https://$SpeechCustomDomain.cognitiveservices.azure.com" `
             "CORS_ORIGIN=$corsOrigins" `
-        --min-replicas 0 `
+            "ADMIN_API_KEY=secretref:admin-api-key" `
+        --min-replicas 1 `
         --max-replicas 2 `
         --output none
 }
@@ -563,29 +587,41 @@ try {
     Invoke-Npm run build --workspace @live-translation/client-audience
     if ($LASTEXITCODE -ne 0) { throw "Audience app build failed" }
 
-    # Combine both apps into a single output directory:
+    Write-Host "  Building admin app (VITE_API_BASE_URL=https://$containerAppFqdn)..."
+    $env:VITE_BASE_PATH = "/admin/"
+    Invoke-Npm run build --workspace @live-translation/client-admin
+    if ($LASTEXITCODE -ne 0) { throw "Admin app build failed" }
+    Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
+
+    # Combine all three apps into a single output directory:
     #   /           → audience app (primary public-facing app)
     #   /speaker/   → speaker app
+    #   /admin/     → admin monitoring dashboard (gated by ADMIN_API_KEY, not by SWA routing)
     $combinedOutput = Join-Path $repoRoot ".deploy-output"
     if (Test-Path $combinedOutput) { Remove-Item -Recurse -Force $combinedOutput }
     New-Item -ItemType Directory -Path $combinedOutput -Force | Out-Null
 
     $audienceDist = Join-Path $repoRoot "client-audience" "dist"
     $speakerDist = Join-Path $repoRoot "client-speaker" "dist"
+    $adminDist = Join-Path $repoRoot "client-admin" "dist"
 
     if (-not (Test-Path $audienceDist)) { throw "Audience dist not found at $audienceDist" }
     if (-not (Test-Path $speakerDist)) { throw "Speaker dist not found at $speakerDist" }
+    if (-not (Test-Path $adminDist)) { throw "Admin dist not found at $adminDist" }
 
-    Write-Host "  Combining outputs (audience at /, speaker at /speaker/)..."
+    Write-Host "  Combining outputs (audience at /, speaker at /speaker/, admin at /admin/)..."
     Copy-Item -Recurse -Path "$audienceDist\*" -Destination $combinedOutput
     $speakerOutputDir = Join-Path $combinedOutput "speaker"
     New-Item -ItemType Directory -Path $speakerOutputDir -Force | Out-Null
     Copy-Item -Recurse -Path "$speakerDist\*" -Destination $speakerOutputDir
+    $adminOutputDir = Join-Path $combinedOutput "admin"
+    New-Item -ItemType Directory -Path $adminOutputDir -Force | Out-Null
+    Copy-Item -Recurse -Path "$adminDist\*" -Destination $adminOutputDir
 
     # Create staticwebapp.config.json for SPA routing.
     # Routes are matched in order; first match wins.
-    # - /speaker/assets/* has NO rewrite so assets are served as actual files.
-    # - /speaker/* is the SPA catch-all; rewrites to the speaker index.html.
+    # - /speaker/assets/* and /admin/assets/* have NO rewrite so assets are served as actual files.
+    # - /speaker/* and /admin/* are SPA catch-alls; each rewrites to its own index.html.
     # Note: SWA allows at most ONE wildcard '*' per pattern, and treats
     # /speaker and /speaker/ as the same route (no trailing-slash duplicate).
     $swaConfig = @{
@@ -593,6 +629,7 @@ try {
             rewrite = "/index.html"
             exclude = @(
                 "/speaker/*",
+                "/admin/*",
                 "/assets/*",
                 "/*.{ico,svg,png,jpg,jpeg,gif,css,js,json,webmanifest,woff,woff2,ttf,map}"
             )
@@ -600,8 +637,10 @@ try {
         routes = @(
             # Assets must come first — no rewrite means the file is served as-is
             @{ route = "/speaker/assets/*" },
-            # SPA catch-all for all other /speaker/* navigation paths
-            @{ route = "/speaker/*"; rewrite = "/speaker/index.html" }
+            @{ route = "/admin/assets/*" },
+            # SPA catch-all for all other /speaker/* and /admin/* navigation paths
+            @{ route = "/speaker/*"; rewrite = "/speaker/index.html" },
+            @{ route = "/admin/*"; rewrite = "/admin/index.html" }
         )
     }
     $swaConfig | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $combinedOutput "staticwebapp.config.json") -Encoding UTF8
@@ -643,5 +682,15 @@ Write-Host "Health check:    https://$containerAppFqdn/health"
 Write-Host ""
 Write-Host "Audience app:    https://$swaHostname"
 Write-Host "Speaker app:     https://$swaHostname/speaker/"
+Write-Host "Admin dashboard: https://$swaHostname/admin/"
 Write-Host ""
-Write-Host "No API keys or secrets were used. All auth is via Microsoft Entra ID."
+Write-Host "All Azure resource access uses Microsoft Entra ID — no Azure API keys were used."
+Write-Host ""
+if (-not $adminApiKeyProvided) {
+    Write-Host "Admin dashboard key (generated this deploy — save it, it will not be shown again):"
+    Write-Host "  $AdminApiKey"
+    Write-Host "  Pass -AdminApiKey `"<value>`" or set ADMIN_API_KEY in the repo-root .env on the next"
+    Write-Host "  deploy to keep this key stable instead of rotating it."
+} else {
+    Write-Host "Admin dashboard key: using the value supplied via -AdminApiKey / ADMIN_API_KEY."
+}

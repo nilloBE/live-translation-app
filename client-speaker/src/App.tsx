@@ -185,6 +185,13 @@ export function App() {
     socket.emit("join-room", roomId, (presence) => {
       setAudienceCount(presence.audienceCount);
       setRelayStatus("Relay connected");
+      // Informational only — lets the admin dashboard show this room has an
+      // active speaker. Does not gate publish-caption on the server.
+      socket.emit("register-speaker", {
+        roomId,
+        sourceLanguage: speakerSource,
+        targetLanguages: speakerTargets,
+      });
     });
   }
 

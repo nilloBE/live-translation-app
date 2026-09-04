@@ -85,9 +85,16 @@ interface ServerToClientEvents {
   "room-presence": (presence: RoomPresence) => void;
 }
 
+export interface SpeakerRegistration {
+  roomId: string;
+  sourceLanguage: string;
+  targetLanguages: string[];
+}
+
 interface ClientToServerEvents {
   "join-room": (roomId: string, acknowledge?: (presence: RoomPresence) => void) => void;
   "leave-room": (roomId: string, acknowledge?: (presence: RoomPresence) => void) => void;
+  "register-speaker": (info: SpeakerRegistration, acknowledge?: (ack: { ok: boolean }) => void) => void;
   "publish-caption": (caption: CaptionMessage, acknowledge?: (ack: { ok: boolean }) => void) => void;
 }
 

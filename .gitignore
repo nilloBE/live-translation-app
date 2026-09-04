@@ -25,6 +25,9 @@ client-speaker/.env.*.local
 client-audience/.env
 client-audience/.env.local
 client-audience/.env.*.local
+client-admin/.env
+client-admin/.env.local
+client-admin/.env.*.local
 server/.env
 server/.env.local
 server/.env.*.local

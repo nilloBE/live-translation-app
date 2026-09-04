@@ -35,8 +35,9 @@ Authentication is handled exclusively via Microsoft Entra ID — no API keys are
 |-----------|----------|-------------|
 | Speaker app | `client-speaker/` | Responsive React + Vite console. Captures microphone audio, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, broadcasts translated captions to the room, and supports a paste-in glossary to improve recognition of names and acronyms. Includes caption sizing and system, light, and dark themes. |
 | Audience app | `client-audience/` | Mobile-first React + Vite viewer. Connects to the backend via Socket.IO, lets each viewer pick a target language, and displays live subtitles with connection status, recent-caption history, adjustable text size, and system, light, and dark themes. |
-| Shared package | `shared/` | Caption protocol types, room normalization, language catalog, and Socket.IO client factory shared by both apps. |
-| Backend server | `server/` | Node.js + Express. Speech token broker (`/api/speech-token`), Socket.IO relay, and CORS. Runs in Docker. |
+| Admin app | `client-admin/` | React + Vite monitoring dashboard for operators. Shows active rooms, live connection counts, whether each room has a speaker, captions relayed, rejected/malformed messages, and server uptime/memory. Gated by a shared `ADMIN_API_KEY`, not by Entra ID. |
+| Shared package | `shared/` | Caption protocol types, room normalization, language catalog, and Socket.IO client factory shared by the speaker and audience apps. |
+| Backend server | `server/` | Node.js + Express. Speech token broker (`/api/speech-token`), Socket.IO relay, admin metrics API/namespace (`/api/admin/status`, `/admin`), and CORS. Runs in Docker. |
 
 ### Azure Resources
 
@@ -99,7 +100,10 @@ When complete, the script prints the live URLs:
 
 - **Audience app**: `https://<swa-hostname>/`
 - **Speaker app**: `https://<swa-hostname>/speaker/`
+- **Admin dashboard**: `https://<swa-hostname>/admin/`
 - **Backend API**: `https://<container-app-fqdn>/`
+
+The admin dashboard is gated by an `ADMIN_API_KEY` shared secret rather than Entra ID (it has no relationship to Azure resource access — it just exposes in-process counters). If you don't pass `-AdminApiKey` or set `ADMIN_API_KEY` in the repo-root `.env`, the script generates a random one on every deploy and prints it once at the end — pin it if you want it to survive redeploys.
 
 You can override the default resource names and region:
 
@@ -155,6 +159,15 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 
 The audience app is designed for phone, tablet, and desktop screens. It shows connection and speaker-language status, reconnects automatically after transient network interruptions, and remembers the UI language, room code, caption language, text size, and theme between visits.
 
+### Admin (operators)
+
+1. Open the admin app at `https://<swa-hostname>/admin/` (or `http://localhost:5175` locally).
+2. Enter the `ADMIN_API_KEY` value configured on the backend. It's remembered on the device (`localStorage`) until you choose **Change key**.
+3. The dashboard shows, live: active room count, current and lifetime connection counts, captions relayed, rejected/malformed messages, server uptime and memory, and a per-room table (connections, peak connections, whether a speaker is registered, source/target languages, captions relayed, created/last-activity times).
+4. Data updates automatically roughly every 2 seconds over a dedicated Socket.IO namespace (`/admin`); `GET /api/admin/status` (with an `x-admin-key` header) returns the same snapshot for scripting or external monitoring.
+
+> The "speaker" indicator is informational, not an access control — any client that calls the internal `register-speaker` event can claim a room. Treat it as "a speaker session was started for this room," not as verified presenter identity. See `docs/scaling-plan.md` for the plan to add real presenter authentication.
+
 ## Local Development
 
 ### Prerequisites
@@ -177,6 +190,7 @@ This creates the resource group, Speech resource, and assigns the required RBAC 
 Copy-Item server/.env.example server/.env
 Copy-Item client-speaker/.env.example client-speaker/.env
 Copy-Item client-audience/.env.example client-audience/.env
+Copy-Item client-admin/.env.example client-admin/.env
 ```
 
 Edit `server/.env` and set your Speech resource values:
@@ -195,7 +209,7 @@ npm install
 npm run dev
 ```
 
-This starts the backend on `http://localhost:3001`, the speaker app on `http://localhost:5173`, and the audience app on `http://localhost:5174`.
+This starts the backend on `http://localhost:3001`, the speaker app on `http://localhost:5173`, the audience app on `http://localhost:5174`, and the admin dashboard on `http://localhost:5175` (key: whatever you set `ADMIN_API_KEY` to in `server/.env`, default `local-dev-admin-key`).
 
 Or run the backend in Docker:
 
@@ -211,6 +225,12 @@ This project uses Microsoft Entra ID authentication exclusively. **Never commit 
 - Production authenticates via Managed Identity on the Container App
 - The backend exchanges an Entra ID token for a short-lived (10-minute) Speech authorization token, which it returns to the browser — the browser never sees a key
 - The built-in `Cognitive Services Speech User` role does not include the `issueToken` data action; a least-privilege custom role (`Live Translation Speech Token Issuer`) is created and assigned by the deployment scripts
+- The admin dashboard (`client-admin/`) is the one exception to "no keys": it's gated by an `ADMIN_API_KEY` shared secret, since it has nothing to do with Azure resource access — it only exposes in-process room/connection counters. This key is generated at deploy time (or pinned via `-AdminApiKey`/`.env`), stored as a Container App secret, and never committed to the repo.
+- **Not yet implemented**: the `/api/speech-token` endpoint and the Socket.IO relay (join/publish) have no per-request caller authentication today — anyone who can reach the backend URL can request a Speech token or join/publish to any room by code. This is tracked as the top-priority item in `docs/scaling-plan.md`.
+
+## Scaling & Capacity
+
+This app has been evaluated for 5 concurrent rooms (speakers) with up to 50 audience members each (250 concurrent connections total). At that scale, raw message throughput is not the constraint — a single backend instance comfortably handles the connection count and caption fan-out involved. The real risks are availability and security ones (a single crash-prone message path, an unauthenticated token/relay endpoint, and a scale-to-zero cold start), most of which are now addressed; see `docs/scaling-plan.md` for the full analysis, what's already fixed, and what's still open before running a live event at this scale.
 
 ## Project Structure
 
@@ -218,8 +238,11 @@ This project uses Microsoft Entra ID authentication exclusively. **Never commit 
 live-translation-app/
 ├── client-speaker/            # Speaker React app (Vite + TypeScript)
 ├── client-audience/           # Audience React app (Vite + TypeScript)
+├── client-admin/              # Admin monitoring dashboard (Vite + TypeScript)
 ├── shared/                    # Caption protocol, language catalog, realtime client
 ├── server/                    # Express backend (Dockerized)
+├── docs/
+│   └── scaling-plan.md        # Bottleneck analysis and rollout plan for the 5-room/250-user target
 ├── scripts/
 │   ├── setup-azure.ps1        # Provision Azure resources for local dev
 │   ├── deploy-azure.ps1       # Full deploy to Azure (provision + build + deploy)

@@ -6,11 +6,26 @@ import morgan from "morgan";
 import { createAzureCredential } from "./auth.js";
 import { config } from "./config.js";
 import { configureRealtime } from "./realtime.js";
+import { createAdminRouter } from "./routes/admin.js";
 import { createSpeechTokenRouter } from "./routes/speechToken.js";
 
 const app = express();
 const httpServer = createServer(app);
 const credential = createAzureCredential();
+
+if (!config.adminApiKey) {
+  console.warn(
+    "ADMIN_API_KEY is not set — the /api/admin/status endpoint and /admin realtime namespace " +
+      "will reject all requests until it is configured.",
+  );
+}
+
+// A synchronous handler throwing (see realtime.ts) is already caught, but log
+// any promise rejection that slips through elsewhere instead of letting the
+// process crash silently and drop every connected room.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
 
 app.use(helmet());
 app.use(
@@ -39,6 +54,7 @@ app.get("/api/config", (_request, response) => {
 });
 
 app.use("/api", createSpeechTokenRouter(credential));
+app.use("/api/admin", createAdminRouter());
 
 app.use(
   (
