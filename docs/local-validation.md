@@ -2,12 +2,13 @@
 
 ## Scope and environment
 
-Tested on 2026-09-26: the working tree on `feature/scaling-hardening-admin-dashboard`,
+Initial local validation on 2026-09-26: the working tree on `feature/scaling-hardening-admin-dashboard`,
 based on `eb0c042a6fa9cd51e5de9bdee144465565ee676f`, not a deployed or committed release.
 Windows host, Node.js 26.3.0, local loopback Socket.IO. The
 backend and simulated clients share one Node process in the load harness. Docker
 Desktop's Linux engine was unavailable, so no container CPU/memory allocation was
-tested. No Azure changes, live Speech calls, push or deployment were performed.
+tested. No Azure changes, live Speech calls, push or deployment were performed during
+that initial phase. The later authorized Azure deployment is recorded below.
 
 ## Results
 
@@ -64,21 +65,57 @@ artifact is retained as sign-off evidence. An operator visual review remains use
 1. Run the expected full event duration with representative Container App CPU/memory
    settings and observe steady-state resource usage after warm-up. Host loopback
    results do not establish Internet/venue Wi-Fi or Azure ingress behavior.
-2. With authorization, verify real F0/S0 changes on a non-event resource, including
-   eligibility, actual tier readback and quota propagation. Mocks cannot prove Azure
-   will allow a particular downgrade.
+2. The later dev deployment verified F0-to-S0 eligibility, upgrade and actual tier
+   readback. S0-to-F0 downgrade and three-recognizer quota behavior remain unverified.
 3. Run three simultaneous real S0 Speech recognizers with intended languages/targets
    through at least two token renewals. Check microphone permissions and caption
    continuity on real audience devices.
-4. After an approved deployment, verify one serving healthy revision, min/max one
-   replica, expected image, S0, frontend assets and a real room/admin connection.
-   The script fails closed during unsettled rollout. If the preserved admin key is
-   unavailable to smoke testing, authenticated admin verification remains open.
-5. Review dependency advisories before public exposure. Dependency installation
-   reported 8 advisories (2 low, 4 moderate, 2 high); no forced unrelated upgrades
-   were performed in this change. Node 26 also reports the tsx loader deprecation.
+4. Deployment topology, asset integrity and synthetic room/admin checks passed in
+   Azure as recorded below. Real-device microphone and visual checks remain open.
+5. Review and remediate dependency advisories before a public event. The initial
+   installation reported 8 advisories; the later root audit reported 16 (2 low,
+   7 moderate, 5 high, 2 critical). The critical findings are `concurrently` and
+   `shell-quote` in local development tooling. Other findings include client-side
+   dependencies; this is not a security clearance. No forced unrelated upgrades
+   were performed. Node 26 also reports the local tsx loader deprecation.
 
 Anonymous token access and room ownership remain deliberate risks, not resolved
 security findings. Limits are process-local abuse safeguards, not a spending cap.
 Deploy only outside events; restarts discard room state and missed captions are
 not replayed. Keep a known-good revision for an operator-managed rollback.
+
+## Azure deployment follow-up: 2026-09-26
+
+- Pushed implementation `2cafbd2` and deployment fixes `cab401b` to
+   `feature/scaling-hardening-admin-dashboard`. Deployed application source: `cab401b`.
+- Reused `rg-live-translation-dev`, with backend/Speech in Sweden Central and the
+   existing Static Web App in West Europe. Existing unused SignalR resources were
+   left untouched; no SignalR integration was added.
+- Upgraded the existing Speech resource from F0 to paid S0 in place. Verified S0
+   readback and a real Managed Identity token exchange. Token value was not printed;
+   `Cache-Control: no-store`, frontend CORS and expiry metadata passed. No audio sent.
+- Image: `acrlivetranslationdev.azurecr.io/live-translation-api:d-f0f4847a82c34a39a1`.
+- Sole healthy serving revision: `api-live-translation-dev--d-f0f4847a82c34a39a1`.
+   Single revision mode, min/max replicas 1, actual ready/running replicas 1,
+   restart count 0 at verification. Allocation: 0.5 vCPU / 1 GiB.
+- Backend: https://api-live-translation-dev.happyocean-bb9b7789.swedencentral.azurecontainerapps.io
+- Audience: https://agreeable-grass-096bf8e03.7.azurestaticapps.net/
+- Speaker: https://agreeable-grass-096bf8e03.7.azurestaticapps.net/speaker/
+- Admin: https://agreeable-grass-096bf8e03.7.azurestaticapps.net/admin/
+- Passed deployment smoke: health, frontend HTML, anonymous admin rejection,
+   authenticated admin REST/socket, speaker registration, audience count and
+   synthetic caption delivery. All nine published HTML/JS/CSS files matched the
+   three local client builds by SHA-256.
+- Generated a random admin credential directly into the ignored root `.env` and
+   installed it as a Container App secret. No credential was committed or printed.
+- Live preflight exposed the SKU API's `value` envelope; fixed with array/envelope
+   regression tests. The first rollout rejected an overlong revision name, leaving
+   the old revision serving. Fixed with a unique 20-character tag and length test.
+- ACR exposed Azure SDK dependencies requiring Node 22+, while the image used
+   Node 20. Switched all Docker stages to Node 24 LTS and strict installation engine
+   checks. ACR validation build `dtd` and deployed build `dte` passed. The isolated
+   backend dependency audit reported zero vulnerabilities at build time; that does
+   not supersede the root/client dependency findings above.
+- This deployment is ready for manual dev testing, not yet signed off for a public
+   event. Three live recognizers, two token renewals, real audience devices and
+   full-duration venue/network/resource validation remain outstanding.
