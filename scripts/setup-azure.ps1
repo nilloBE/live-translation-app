@@ -1,10 +1,21 @@
+<#
+.SYNOPSIS
+    Provision Speech and optional app infrastructure using Entra ID.
+.PARAMETER SpeechSku
+    F0 or S0. Parameter overrides SPEECH_SKU, then existing SKU, then paid S0 for new resources.
+    F0 supports one speaker only. Stop recognizers before changing tiers; Azure may deny a downgrade.
+.EXAMPLE
+    ./scripts/setup-azure.ps1 -SpeechSku S0
+.EXAMPLE
+    ./scripts/setup-azure.ps1 -SpeechSku F0
+#>
 [CmdletBinding()]
 param(
     [string]$Location,
     [string]$ResourceGroup,
     [string]$SpeechResourceName,
     [string]$SpeechCustomDomain,
-    [string]$SignalRResourceName,
+    [ValidateSet('F0', 'S0')][string]$SpeechSku,
     [string]$ContainerRegistryName,
     [string]$ContainerAppEnvironmentName,
     [string]$StaticWebAppName,
@@ -14,6 +25,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/speech-resource.ps1"
 
 function Get-Setting {
     param(
@@ -84,8 +96,10 @@ function Test-AzResource {
     )
 
     $allArguments = $Arguments + @("--output", "none")
-    & az @allArguments 2>$null
-    return $LASTEXITCODE -eq 0
+    $result = & az @allArguments 2>&1
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if (($result | Out-String) -match '\((ResourceNotFound|ResourceGroupNotFound)\)') { return $false }
+    throw "Azure resource lookup failed: $result"
 }
 
 function Set-RoleAssignmentIfMissing {
@@ -205,7 +219,7 @@ $Location = Get-Setting $Location "AZURE_LOCATION" "westeurope"
 $ResourceGroup = Get-Setting $ResourceGroup "AZURE_RESOURCE_GROUP" "rg-live-translation-dev"
 $SpeechResourceName = Get-Setting $SpeechResourceName "SPEECH_RESOURCE_NAME" "speech-live-translation-dev"
 $SpeechCustomDomain = Get-Setting $SpeechCustomDomain "SPEECH_CUSTOM_DOMAIN" $SpeechResourceName
-$SignalRResourceName = Get-Setting $SignalRResourceName "SIGNALR_RESOURCE_NAME" "signalr-live-translation-dev"
+Resolve-SpeechSku $SpeechSku $env:SPEECH_SKU '' | Out-Null
 $ContainerRegistryName = Get-Setting $ContainerRegistryName "ACR_NAME" "acrlivetranslationdev"
 $ContainerAppEnvironmentName = Get-Setting $ContainerAppEnvironmentName "CONTAINER_APP_ENV_NAME" "env-live-translation-dev"
 $StaticWebAppName = Get-Setting $StaticWebAppName "STATIC_WEB_APP_NAME" "web-live-translation-dev"
@@ -225,20 +239,7 @@ Invoke-Az group create `
     --location $Location `
     --output none
 
-if (Test-AzResource cognitiveservices account show --name $SpeechResourceName --resource-group $ResourceGroup) {
-    Write-Host "Azure AI Speech resource already exists: $SpeechResourceName"
-} else {
-    Write-Host "Creating Azure AI Speech resource $SpeechResourceName"
-    Invoke-Az cognitiveservices account create `
-        --name $SpeechResourceName `
-        --resource-group $ResourceGroup `
-        --kind SpeechServices `
-        --sku F0 `
-        --location $Location `
-        --custom-domain $SpeechCustomDomain `
-        --yes `
-        --output none
-}
+$actualSpeechSku = Ensure-SpeechResource $SpeechResourceName $ResourceGroup $Location $SpeechCustomDomain $SpeechSku
 
 $currentSpeechCustomDomain = Invoke-AzText cognitiveservices account show `
     --name $SpeechResourceName `
@@ -283,19 +284,6 @@ Set-RoleAssignmentByDefinitionIdIfMissing `
     -Scope $speechResourceId
 
 if ($Mode -eq "Full") {
-    if (Test-AzResource signalr show --name $SignalRResourceName --resource-group $ResourceGroup) {
-        Write-Host "Azure SignalR Service already exists: $SignalRResourceName"
-    } else {
-        Write-Host "Creating Azure SignalR Service $SignalRResourceName"
-        Invoke-Az signalr create `
-            --name $SignalRResourceName `
-            --resource-group $ResourceGroup `
-            --sku Free_F1 `
-            --service-mode Default `
-            --location $Location `
-            --output none
-    }
-
     if (Test-AzResource acr show --name $ContainerRegistryName --resource-group $ResourceGroup) {
         Write-Host "Azure Container Registry already exists: $ContainerRegistryName"
     } else {
@@ -336,10 +324,10 @@ Write-Host "Azure resources are ready."
 Write-Host "Mode: $Mode"
 Write-Host "Resource group: $ResourceGroup"
 Write-Host "Speech resource: $SpeechResourceName"
+Write-Host "Speech SKU: $actualSpeechSku"
 Write-Host "Speech endpoint: https://$SpeechCustomDomain.cognitiveservices.azure.com"
 
 if ($Mode -eq "Full") {
-    Write-Host "SignalR resource: $SignalRResourceName"
     Write-Host "Container registry: $ContainerRegistryName"
     Write-Host "Container Apps environment: $ContainerAppEnvironmentName"
     Write-Host "Static Web App: $StaticWebAppName"

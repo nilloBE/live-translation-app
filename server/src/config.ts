@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-const defaultCorsOrigins = ["http://localhost:5173", "http://localhost:5174"];
+const defaultCorsOrigins = ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"];
 
 function parseCorsOrigins(value: string | undefined) {
   return value?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? defaultCorsOrigins;
@@ -12,4 +12,7 @@ export const config = {
   corsOrigin: parseCorsOrigins(process.env.CORS_ORIGIN),
   speechRegion: process.env.SPEECH_REGION ?? "westeurope",
   speechEndpoint: process.env.SPEECH_ENDPOINT ?? "https://speech-live-translation-dev.cognitiveservices.azure.com",
+  // Shared secret gating the /api/admin/* routes and the /admin Socket.IO namespace.
+  // Not an Azure credential — a simple app-level bearer secret for the monitoring dashboard.
+  adminApiKey: process.env.ADMIN_API_KEY ?? "",
 };
