@@ -18,6 +18,7 @@ export function createSpeechTokenRouter(credential: TokenCredential) {
   const router = Router();
 
   router.get("/speech-token", async (_request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
     try {
       const accessToken = await credential.getToken(cognitiveServicesScope);
 
@@ -66,6 +67,7 @@ async function requestSpeechAuthorizationToken(tokenEndpoint: string, accessToke
 async function requestSpeechAuthorizationTokenWithFetch(tokenEndpoint: string, accessToken: string) {
   const tokenResponse = await fetch(tokenEndpoint, {
     method: "POST",
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Length": "0",

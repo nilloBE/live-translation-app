@@ -7,10 +7,10 @@
 .DESCRIPTION
     This script:
     1. Creates the resource group (if missing)
-    2. Provisions Azure AI Speech, Azure SignalR, Container Registry, Container Apps Environment, and Static Web App
+    2. Provisions Azure AI Speech, Container Registry, Container Apps Environment, and Static Web App
     3. Builds and pushes the backend Docker image to ACR
     4. Creates or updates the Container App with system-assigned Managed Identity
-    5. Assigns RBAC roles (Cognitive Services Speech User, SignalR App Server) to the Container App identity
+    5. Assigns Speech and ACR RBAC roles to the Container App identity
     6. Builds and deploys the frontend apps to Azure Static Web Apps
     7. Prints the deployment URLs
 
@@ -23,8 +23,9 @@
 .PARAMETER SpeechResourceName
     Name of the Azure AI Speech resource. Default: speech-live-translation-dev
 
-.PARAMETER SignalRResourceName
-    Name of the Azure SignalR resource. Default: signalr-live-translation-dev
+.PARAMETER SpeechSku
+    F0 or S0. Parameter overrides SPEECH_SKU, then existing SKU, then S0 for new resources.
+    F0 supports one speaker only. S0 is paid. Stop all recognizers before changing SKU.
 
 .PARAMETER ContainerRegistryName
     Name of the Azure Container Registry. Default: acrlivetranslationdev
@@ -40,9 +41,8 @@
 
 .PARAMETER AdminApiKey
     Shared secret for the /admin monitoring dashboard (ADMIN_API_KEY on the Container App).
-    Not an Azure credential - just gates the admin dashboard. If omitted, a random key is
-    generated on every deploy and printed once at the end. Pass the same value on every
-    deploy (or set ADMIN_API_KEY in the repo-root .env) to keep the admin dashboard key stable.
+    Not an Azure credential. Omission preserves an existing secret. A new app requires
+    ADMIN_API_KEY in a private environment or root .env. Supplying a value rotates the key.
 
 .EXAMPLE
     .\scripts\deploy-azure.ps1
@@ -54,7 +54,7 @@ param(
     [string]$ResourceGroup,
     [string]$SpeechResourceName,
     [string]$SpeechCustomDomain,
-    [string]$SignalRResourceName,
+    [ValidateSet('F0', 'S0')][string]$SpeechSku,
     [string]$ContainerRegistryName,
     [string]$ContainerAppEnvironmentName,
     [string]$ContainerAppName,
@@ -65,6 +65,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot/speech-resource.ps1"
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -100,22 +101,28 @@ function Import-DotEnv {
 
 function Invoke-Az {
     param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Arguments)
-    & az @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "Azure CLI command failed: az $($Arguments -join ' ')" }
+    $output = & az @Arguments 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        if ($Arguments -contains '--secrets') { throw 'Azure CLI secret operation failed; details suppressed.' }
+        throw "Azure CLI operation failed: $output"
+    }
+    $output
 }
 
 function Invoke-AzText {
     param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Arguments)
     $output = & az @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "Azure CLI command failed: az $($Arguments -join ' ')" }
+    if ($LASTEXITCODE -ne 0) { throw 'Azure CLI read failed; command arguments suppressed.' }
     return ($output | Out-String).Trim()
 }
 
 function Test-AzResource {
     param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Arguments)
     $allArgs = $Arguments + @("--output", "none")
-    & az @allArgs 2>$null
-    return $LASTEXITCODE -eq 0
+    $result = & az @allArgs 2>&1
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if (($result | Out-String) -match '\((ResourceNotFound|ResourceGroupNotFound)\)') { return $false }
+    throw "Azure resource lookup failed: $result"
 }
 
 function Set-RoleAssignmentIfMissing {
@@ -275,7 +282,7 @@ $Location = Get-Setting $Location "AZURE_LOCATION" "westeurope"
 $ResourceGroup = Get-Setting $ResourceGroup "AZURE_RESOURCE_GROUP" "rg-live-translation-dev"
 $SpeechResourceName = Get-Setting $SpeechResourceName "SPEECH_RESOURCE_NAME" "speech-live-translation-dev"
 $SpeechCustomDomain = Get-Setting $SpeechCustomDomain "SPEECH_CUSTOM_DOMAIN" $SpeechResourceName
-$SignalRResourceName = Get-Setting $SignalRResourceName "SIGNALR_RESOURCE_NAME" "signalr-live-translation-dev"
+Resolve-SpeechSku $SpeechSku $env:SPEECH_SKU '' | Out-Null
 $ContainerRegistryName = Get-Setting $ContainerRegistryName "ACR_NAME" "acrlivetranslationdev"
 $ContainerAppEnvironmentName = Get-Setting $ContainerAppEnvironmentName "CONTAINER_APP_ENV_NAME" "env-live-translation-dev"
 $ContainerAppName = Get-Setting $ContainerAppName "CONTAINER_APP_NAME" "api-live-translation-dev"
@@ -285,13 +292,11 @@ $StaticWebAppName = Get-Setting $StaticWebAppName "STATIC_WEB_APP_NAME" "web-liv
 # global CDN, so its location is independent from the backend region.
 $StaticWebAppLocation = Get-Setting $StaticWebAppLocation "STATIC_WEB_APP_LOCATION" "westeurope"
 
-# Shared secret for the /admin dashboard. If not supplied via -AdminApiKey or the
-# ADMIN_API_KEY setting, generate a fresh one for this deploy and print it once at the end.
 $adminApiKeyProvided = -not [string]::IsNullOrWhiteSpace((Get-Setting $AdminApiKey "ADMIN_API_KEY" ""))
-$AdminApiKey = Get-Setting $AdminApiKey "ADMIN_API_KEY" ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
+$AdminApiKey = Get-Setting $AdminApiKey "ADMIN_API_KEY" ""
 
 $ImageName = "live-translation-api"
-$ImageTag = "latest"
+$ImageTag = "deploy-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 $FullImageName = "$ContainerRegistryName.azurecr.io/${ImageName}:${ImageTag}"
 $SubscriptionId = Invoke-AzText account show --query id --output tsv
 
@@ -306,7 +311,6 @@ Write-Host "Configuration:"
 Write-Host "  Location:             $Location"
 Write-Host "  Resource Group:       $ResourceGroup"
 Write-Host "  Speech Resource:      $SpeechResourceName"
-Write-Host "  SignalR Resource:     $SignalRResourceName"
 Write-Host "  Container Registry:   $ContainerRegistryName"
 Write-Host "  Container App Env:    $ContainerAppEnvironmentName"
 Write-Host "  Container App:        $ContainerAppName"
@@ -324,18 +328,14 @@ Invoke-Az group create --name $ResourceGroup --location $Location --output none
 # Step 2: Azure AI Speech (with custom subdomain for Entra ID token exchange)
 # ===========================================================================
 Write-Host "[2/10] Provisioning Azure AI Speech resource..."
-if (Test-AzResource cognitiveservices account show --name $SpeechResourceName --resource-group $ResourceGroup) {
-    Write-Host "  Already exists: $SpeechResourceName"
-} else {
-    Invoke-Az cognitiveservices account create `
-        --name $SpeechResourceName `
-        --resource-group $ResourceGroup `
-        --kind SpeechServices `
-        --sku F0 `
-        --location $Location `
-        --custom-domain $SpeechCustomDomain `
-        --yes `
-        --output none
+$actualSpeechSku = Ensure-SpeechResource $SpeechResourceName $ResourceGroup $Location $SpeechCustomDomain $SpeechSku
+$actualDomain = Invoke-AzText cognitiveservices account show --name $SpeechResourceName --resource-group $ResourceGroup --query properties.customSubDomainName --output tsv
+if ($actualDomain -ne $SpeechCustomDomain) { throw 'Speech custom subdomain mismatch. Set SPEECH_CUSTOM_DOMAIN to the actual resource subdomain.' }
+$appExists = Test-AzResource containerapp show --name $ContainerAppName --resource-group $ResourceGroup
+if (-not $adminApiKeyProvided) {
+    if (-not $appExists) { throw 'Set ADMIN_API_KEY privately before the first deployment.' }
+    $secretNames = Invoke-AzText containerapp secret list --name $ContainerAppName --resource-group $ResourceGroup --query '[].name' --output tsv
+    if ('admin-api-key' -notin ($secretNames -split '\r?\n')) { throw 'Set ADMIN_API_KEY privately to enable the admin dashboard.' }
 }
 
 $speechResourceId = Invoke-AzText cognitiveservices account show `
@@ -343,26 +343,7 @@ $speechResourceId = Invoke-AzText cognitiveservices account show `
     --resource-group $ResourceGroup `
     --query id --output tsv
 
-# ===========================================================================
-# Step 3: Azure SignalR Service
-# ===========================================================================
-Write-Host "[3/10] Provisioning Azure SignalR Service..."
-if (Test-AzResource signalr show --name $SignalRResourceName --resource-group $ResourceGroup) {
-    Write-Host "  Already exists: $SignalRResourceName"
-} else {
-    Invoke-Az signalr create `
-        --name $SignalRResourceName `
-        --resource-group $ResourceGroup `
-        --sku Free_F1 `
-        --service-mode Default `
-        --location $Location `
-        --output none
-}
-
-$signalrResourceId = Invoke-AzText signalr show `
-    --name $SignalRResourceName `
-    --resource-group $ResourceGroup `
-    --query id --output tsv
+Write-Host '[3/10] Using in-process Socket.IO; no SignalR resources required.'
 
 # ===========================================================================
 # Step 4: Azure Container Registry
@@ -429,8 +410,12 @@ if ([string]::IsNullOrWhiteSpace($swaHostname)) {
 
 # min-replicas is 1 (not 0) so the container isn't cold-started by the first
 # connection of a live event; see docs/scaling-plan.md.
-if (Test-AzResource containerapp show --name $ContainerAppName --resource-group $ResourceGroup) {
+if ($appExists) {
     Write-Host "  Updating existing Container App..."
+    Invoke-Az containerapp revision set-mode --name $ContainerAppName --resource-group $ResourceGroup --mode single --output none
+    if ($adminApiKeyProvided) {
+        Invoke-Az containerapp secret set --name $ContainerAppName --resource-group $ResourceGroup --secrets "admin-api-key=$AdminApiKey" --output none
+    }
     Invoke-Az containerapp update `
         --name $ContainerAppName `
         --resource-group $ResourceGroup `
@@ -443,12 +428,8 @@ if (Test-AzResource containerapp show --name $ContainerAppName --resource-group 
             "CORS_ORIGIN=$corsOrigins" `
             "ADMIN_API_KEY=secretref:admin-api-key" `
         --min-replicas 1 `
-        --max-replicas 2 `
-        --output none
-    Invoke-Az containerapp secret set `
-        --name $ContainerAppName `
-        --resource-group $ResourceGroup `
-        --secrets "admin-api-key=$AdminApiKey" `
+        --max-replicas 1 `
+        --revision-suffix $ImageTag `
         --output none
 } else {
     Write-Host "  Creating new Container App..."
@@ -471,7 +452,9 @@ if (Test-AzResource containerapp show --name $ContainerAppName --resource-group 
             "CORS_ORIGIN=$corsOrigins" `
             "ADMIN_API_KEY=secretref:admin-api-key" `
         --min-replicas 1 `
-        --max-replicas 2 `
+        --max-replicas 1 `
+        --revisions-mode single `
+        --revision-suffix $ImageTag `
         --output none
 }
 
@@ -517,11 +500,6 @@ Set-RoleAssignmentIfMissing `
     -RoleName "AcrPull" `
     -Scope $acrResourceId
 
-# SignalR App Server — allows the backend to use SignalR in the future
-Set-RoleAssignmentIfMissing `
-    -AssigneeObjectId $appIdentityPrincipalId `
-    -RoleName "SignalR App Server" `
-    -Scope $signalrResourceId
 
 # ===========================================================================
 # Step 9: Static Web App + Frontend Build & Deploy
@@ -672,9 +650,29 @@ try {
 # ===========================================================================
 # Summary
 # ===========================================================================
+. "$PSScriptRoot/deployment-checks.ps1"
+Write-Host 'Verifying serving revision, replica limits and Speech SKU...'
+$deployedApp = Invoke-AzText containerapp show --name $ContainerAppName --resource-group $ResourceGroup --output json | ConvertFrom-Json
+$revisions = Invoke-AzText containerapp revision list --name $ContainerAppName --resource-group $ResourceGroup --output json | ConvertFrom-Json
+$servingRevision = Assert-DeploymentState $deployedApp $revisions $FullImageName
+$verifiedSku = Invoke-AzText cognitiveservices account show --name $SpeechResourceName --resource-group $ResourceGroup --query sku.name --output tsv
+if ($verifiedSku -ne $actualSpeechSku) { throw "Speech SKU changed during deployment: $verifiedSku" }
+$savedAdminKey = $env:ADMIN_API_KEY
+try {
+    $env:ADMIN_API_KEY = $AdminApiKey
+    & node "$PSScriptRoot/deployment-smoke.mjs" "https://$containerAppFqdn" "https://$swaHostname"
+    if ($LASTEXITCODE -ne 0) { throw 'Post-deployment smoke failed. Deployment is not verified.' }
+} finally { $env:ADMIN_API_KEY = $savedAdminKey }
+if ([string]::IsNullOrWhiteSpace($AdminApiKey)) {
+    Write-Warning 'Admin secret was preserved; authenticated admin check remains required using the existing private key.'
+}
 Write-Host ""
 Write-Host "========================================"
-Write-Host " Deployment Complete!"
+if ([string]::IsNullOrWhiteSpace($AdminApiKey)) {
+    Write-Host ' Deployment finished; admin verification pending'
+} else {
+    Write-Host ' Deployment and smoke checks complete'
+}
 Write-Host "========================================"
 Write-Host ""
 Write-Host "Backend API:     https://$containerAppFqdn"
@@ -684,13 +682,9 @@ Write-Host "Audience app:    https://$swaHostname"
 Write-Host "Speaker app:     https://$swaHostname/speaker/"
 Write-Host "Admin dashboard: https://$swaHostname/admin/"
 Write-Host ""
-Write-Host "All Azure resource access uses Microsoft Entra ID — no Azure API keys were used."
+Write-Host 'Azure runtime access uses Entra ID/RBAC; SWA publishing uses a private deployment credential.'
 Write-Host ""
-if (-not $adminApiKeyProvided) {
-    Write-Host "Admin dashboard key (generated this deploy — save it, it will not be shown again):"
-    Write-Host "  $AdminApiKey"
-    Write-Host "  Pass -AdminApiKey `"<value>`" or set ADMIN_API_KEY in the repo-root .env on the next"
-    Write-Host "  deploy to keep this key stable instead of rotating it."
-} else {
-    Write-Host "Admin dashboard key: using the value supplied via -AdminApiKey / ADMIN_API_KEY."
-}
+Write-Host "Speech SKU: $actualSpeechSku"
+Write-Host "Image: $FullImageName"
+Write-Host "Serving revision: $servingRevision"
+Write-Host 'Admin key retained or explicitly set; value is never printed.'

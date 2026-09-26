@@ -121,6 +121,7 @@ h1 {
   margin: 0 auto;
   padding: 28px 0 48px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 

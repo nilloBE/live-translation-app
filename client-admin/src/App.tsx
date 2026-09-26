@@ -7,6 +7,8 @@ const adminKeyStorageKey = "live-translation:admin-key";
 
 interface AdminRoomSnapshot {
   roomId: string;
+  audienceCount: number;
+  speakerCount: number;
   connectionCount: number;
   peakConnectionCount: number;
   hasSpeaker: boolean;
@@ -30,13 +32,20 @@ interface AdminSnapshot {
   rooms: AdminRoomSnapshot[];
 }
 
-type ConnectionStatus = "connecting" | "connected" | "unauthorized" | "disconnected";
+type ConnectionStatus = "connecting" | "connected" | "unauthorized" | "disconnected" | "stale";
 
 export function App() {
   const [apiKey, setApiKey] = useState<string>(() => loadStoredKey());
   const [keyDraft, setKeyDraft] = useState("");
   const [snapshot, setSnapshot] = useState<AdminSnapshot | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  const [lastReceived, setLastReceived] = useState(0);
+  const [clock, setClock] = useState(Date.now);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!apiKey) {
@@ -45,17 +54,19 @@ export function App() {
 
     setStatus("connecting");
     setSnapshot(null);
+    setLastReceived(0);
 
     const socket: Socket = io(`${apiBaseUrl}/admin`, {
       auth: { key: apiKey },
+      forceNew: true,
     });
 
     socket.on("connect", () => setStatus("connected"));
-    socket.on("metrics", (payload: AdminSnapshot) => setSnapshot(payload));
+    socket.on("metrics", (payload: AdminSnapshot) => { setSnapshot(payload); setLastReceived(Date.now()); });
     socket.on("disconnect", () => setStatus("disconnected"));
-    socket.on("connect_error", () => {
-      setStatus("unauthorized");
-      socket.disconnect();
+    socket.on("connect_error", (error) => {
+      setStatus(error.message === 'unauthorized' ? 'unauthorized' : 'disconnected');
+      if (error.message === 'unauthorized') socket.disconnect();
     });
 
     return () => {
@@ -96,7 +107,7 @@ export function App() {
           <h1>Live Translation Admin</h1>
         </div>
         <div className="header-actions">
-          <StatusPill status={status} />
+          <StatusPill status={status === 'connected' && (!lastReceived || clock - lastReceived > 6000) ? 'stale' : status} />
           <button type="button" className="secondary-action" onClick={handleSignOut}>
             <LogOut size={16} aria-hidden="true" />
             Change key
@@ -128,7 +139,7 @@ function Dashboard({ snapshot }: { snapshot: AdminSnapshot }) {
         <SummaryCard icon={<Activity size={20} aria-hidden="true" />} label="Active rooms" value={String(snapshot.activeRoomCount)} />
         <SummaryCard
           icon={<Users size={20} aria-hidden="true" />}
-          label="Current connections"
+          label="Participant connections"
           value={String(snapshot.currentConnections)}
         />
         <SummaryCard label="Connections since start" value={String(snapshot.totalConnectionsEver)} />
@@ -152,7 +163,9 @@ function Dashboard({ snapshot }: { snapshot: AdminSnapshot }) {
                   <th scope="col">Speaker</th>
                   <th scope="col">Source</th>
                   <th scope="col">Targets</th>
-                  <th scope="col">Connections</th>
+                  <th scope="col">Audience</th>
+                  <th scope="col">Speakers</th>
+                  <th scope="col">Total</th>
                   <th scope="col">Peak</th>
                   <th scope="col">Captions</th>
                   <th scope="col">Created</th>
@@ -168,7 +181,7 @@ function Dashboard({ snapshot }: { snapshot: AdminSnapshot }) {
                     <td>
                       {room.hasSpeaker ? (
                         <span className="status-pill" data-state="active">
-                          <Mic size={14} aria-hidden="true" /> Live
+                          <Mic size={14} aria-hidden="true" /> Registered
                         </span>
                       ) : (
                         <span className="status-pill" data-state="warning">
@@ -178,6 +191,8 @@ function Dashboard({ snapshot }: { snapshot: AdminSnapshot }) {
                     </td>
                     <td>{room.sourceLanguage ?? "—"}</td>
                     <td>{room.targetLanguages.length > 0 ? room.targetLanguages.join(", ") : "—"}</td>
+                    <td>{room.audienceCount}</td>
+                    <td>{room.speakerCount}</td>
                     <td>{room.connectionCount}</td>
                     <td>{room.peakConnectionCount}</td>
                     <td>{room.captionCount}</td>
@@ -192,7 +207,7 @@ function Dashboard({ snapshot }: { snapshot: AdminSnapshot }) {
       </section>
 
       <p className="refresh-note">
-        <RefreshCw size={14} aria-hidden="true" /> Updates automatically every few seconds. Server time:{" "}
+        <RefreshCw size={14} aria-hidden="true" /> Last update:{" "}
         {new Date(snapshot.serverTime).toLocaleTimeString()}
       </p>
     </>
@@ -261,6 +276,7 @@ function StatusPill({ status }: { status: ConnectionStatus }) {
     connected: "Live",
     unauthorized: "Unauthorized",
     disconnected: "Disconnected",
+    stale: 'Stale',
   };
   const state = status === "connected" ? "active" : status === "unauthorized" ? "warning" : undefined;
 

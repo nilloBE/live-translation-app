@@ -21,6 +21,8 @@ export interface CaptionMessage {
 }
 
 export interface RoomPresence {
+  ok: boolean;
+  error?: string;
   roomId: string;
   audienceCount: number;
 }
@@ -128,12 +130,13 @@ export const targetLanguages: TargetLanguage[] = [
 export function createRealtimeConnection(apiBaseUrl: string): RealtimeConnection {
   return io(apiBaseUrl, {
     autoConnect: false,
+    forceNew: true,
     transports: ["polling", "websocket"],
   });
 }
 
 export function normalizeRoomId(roomId: string) {
-  const normalizedRoomId = roomId.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  const normalizedRoomId = roomId.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 32);
   return normalizedRoomId || "LIVE";
 }
 

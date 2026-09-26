@@ -25,7 +25,7 @@ A web-based live captioning experience for presenters and audiences. The speaker
 2. Captions are sent to the **backend server**, which relays them to all audience devices connected to the same room code.
 3. Each **audience device** connects via a browser, picks a target language, and reads live subtitles.
 
-Authentication is handled exclusively via Microsoft Entra ID — no API keys are stored or committed anywhere.
+Azure service authentication uses Microsoft Entra ID, without Azure resource API keys. Participants are anonymous; the admin portal has a separate private application key. Never commit credentials.
 
 ## Architecture
 
@@ -48,14 +48,15 @@ All resources are deployed to a single resource group (e.g. `rg-live-translation
 | Azure AI Speech | Speech-to-text + translation |
 | Azure Container Registry | Stores the backend Docker image |
 | Azure Container Apps | Hosts the backend server |
-| Azure Static Web Apps | Hosts the speaker and audience React apps |
-| Azure SignalR Service | Cloud-scale real-time caption broadcasting |
+| Azure Static Web Apps | Hosts the speaker, audience and admin React apps |
+
+The relay runs in one Container App replica using in-memory Socket.IO. Setup and deployment do not provision SignalR. Previously created SignalR resources are not automatically deleted.
 
 ### Authentication
 
 - **Local development**: uses your `az login` identity via `DefaultAzureCredential`.
 - **Production**: uses the system-assigned Managed Identity of the Container App.
-- No API keys are used. All Azure access is via RBAC role assignments.
+- Speech and registry access use Entra ID/RBAC, not resource API keys. Static Web Apps publishing uses a deployment credential internally; do not log or commit it.
 
 ### Supported Languages
 
@@ -72,7 +73,7 @@ A single session can translate into multiple target languages simultaneously. Ea
 
 - Node.js 20 or later and npm 10 or later
 - Azure CLI, signed in with an account that can create resources and assign RBAC roles
-- An Azure subscription that allows Container Apps, ACR, Speech, SignalR, and Static Web Apps
+- An Azure subscription that allows Container Apps, ACR, Speech, and Static Web Apps
 
 ```powershell
 az login
@@ -81,20 +82,23 @@ az account show
 
 ### Deploy
 
-Run the deployment script. It provisions all Azure resources, builds and pushes the Docker image, assigns all RBAC roles, builds both frontend apps, and deploys everything:
+First configure a private `ADMIN_API_KEY` in your environment or ignored root `.env` for a new backend. Run the deployment script outside live events. It builds all three frontend apps and deploys the backend with one warm replica:
 
 ```powershell
-.\scripts\deploy-azure.ps1
+.\scripts\deploy-azure.ps1 -SpeechSku S0
 ```
 
 The script performs these steps automatically:
 1. Creates or reuses the resource group
-2. Provisions Azure AI Speech, SignalR, Container Registry, Container Apps Environment, and Static Web App
-3. Builds the backend Docker image via ACR Tasks (no local Docker required)
-4. Deploys the Container App with system-assigned Managed Identity
-5. Assigns RBAC roles: `Cognitive Services Speech User`, `Live Translation Speech Token Issuer` (custom), `AcrPull`, `SignalR App Server`
-6. Builds both frontend apps with the backend URL configured
+2. Creates or updates Speech with verified SKU selection, then provisions Container Registry, Container Apps Environment, and Static Web App
+3. Builds a uniquely tagged backend image via ACR Tasks (no local Docker required)
+4. Installs/preserves the admin secret before deploying a single-revision Container App with Managed Identity and minimum/maximum replicas both set to 1
+5. Assigns RBAC roles: `Cognitive Services Speech User`, `Live Translation Speech Token Issuer` (custom), `AcrPull`
+6. Builds all three frontend apps with the backend URL configured
 7. Deploys the combined frontend to the Static Web App
+8. Checks the sole active/latest-ready healthy revision, image, replica settings, secret reference, actual Speech SKU, frontend routes, health, synthetic caption delivery and admin access
+
+The topology check fails closed if rollout has not settled. A successful upload is not enough to declare readiness. Single-revision rollouts can briefly overlap versions, and restarting loses room state; do not deploy during an event.
 
 When complete, the script prints the live URLs:
 
@@ -103,7 +107,20 @@ When complete, the script prints the live URLs:
 - **Admin dashboard**: `https://<swa-hostname>/admin/`
 - **Backend API**: `https://<container-app-fqdn>/`
 
-The admin dashboard is gated by an `ADMIN_API_KEY` shared secret rather than Entra ID (it has no relationship to Azure resource access — it just exposes in-process counters). If you don't pass `-AdminApiKey` or set `ADMIN_API_KEY` in the repo-root `.env`, the script generates a random one on every deploy and prints it once at the end — pin it if you want it to survive redeploys.
+The admin dashboard uses a private `ADMIN_API_KEY` unrelated to Azure resource access. Omission preserves the existing Container App secret. Supplying a value installs/rotates it before the new revision starts; it is never printed. Prefer a private environment value or ignored root `.env` to a literal command-line secret. If the existing key is preserved but not available locally, the deployment smoke explicitly leaves authenticated admin verification open; check the dashboard with that key before the event.
+
+### Speech tier selection
+
+Both setup and deploy accept `-SpeechSku F0` or `-SpeechSku S0`. Precedence is: explicit parameter, real `SPEECH_SKU` environment value, root `.env`, existing resource SKU, then **paid S0** for a new resource. Blank/omitted settings preserve an existing tier.
+
+```powershell
+.\scripts\setup-azure.ps1 -SpeechSku F0
+.\scripts\deploy-azure.ps1 -SpeechSku S0
+```
+
+F0 supports only one concurrent speaker and has monthly usage limits. It is unsuitable for the three-room event and does not make the rest of Azure hosting free. Leaving `SPEECH_SKU=F0` configured requests F0 on subsequent deployments; `-SpeechSku S0` overrides it.
+
+Tier changes are in place, never delete/recreate. Stop active recognizers first. The scripts check resource-specific advertised SKUs and read back the resulting tier; Azure policy, free-tier eligibility or quota can still reject a downgrade. A refusal stops deployment, reports the actual SKU if readable, and never silently falls back. Verify live Speech and quota propagation separately.
 
 You can override the default resource names and region:
 
@@ -163,10 +180,10 @@ The audience app is designed for phone, tablet, and desktop screens. It shows co
 
 1. Open the admin app at `https://<swa-hostname>/admin/` (or `http://localhost:5175` locally).
 2. Enter the `ADMIN_API_KEY` value configured on the backend. It's remembered on the device (`localStorage`) until you choose **Change key**.
-3. The dashboard shows, live: active room count, current and lifetime connection counts, captions relayed, rejected/malformed messages, server uptime and memory, and a per-room table (connections, peak connections, whether a speaker is registered, source/target languages, captions relayed, created/last-activity times).
+3. The dashboard separates audience, registered speaker and total participant connections per room. These count sockets/tabs, not unique people; admins are excluded. It also shows peaks, captions, rejected publishes, uptime and memory. Connections since start includes participant-namespace connections, even those that never joined, and resets with the process.
 4. Data updates automatically roughly every 2 seconds over a dedicated Socket.IO namespace (`/admin`); `GET /api/admin/status` (with an `x-admin-key` header) returns the same snapshot for scripting or external monitoring.
 
-> The "speaker" indicator is informational, not an access control — any client that calls the internal `register-speaker` event can claim a room. Treat it as "a speaker session was started for this room," not as verified presenter identity. See `docs/scaling-plan.md` for the plan to add real presenter authentication.
+Snapshots older than six seconds are marked stale while connected. Disconnection and rejected keys have separate states. A registered speaker is not a verified identity or proof that a microphone is active. Only one socket can own a room's speaker registration, but an anonymous client can claim a vacant room. Participant authentication remains out of scope.
 
 ## Local Development
 
@@ -182,7 +199,7 @@ The audience app is designed for phone, tablet, and desktop screens. It shows co
 .\scripts\setup-azure.ps1
 ```
 
-This creates the resource group, Speech resource, and assigns the required RBAC roles to your signed-in user. See the script for available parameters.
+This creates the resource group, Speech resource, and required RBAC assignments. With no SKU configured, a new resource uses paid S0; use `-SpeechSku F0` for one-speaker development. Existing tiers are preserved by default.
 
 ### Configure environment
 
@@ -209,7 +226,7 @@ npm install
 npm run dev
 ```
 
-This starts the backend on `http://localhost:3001`, the speaker app on `http://localhost:5173`, the audience app on `http://localhost:5174`, and the admin dashboard on `http://localhost:5175` (key: whatever you set `ADMIN_API_KEY` to in `server/.env`, default `local-dev-admin-key`).
+This starts the backend on `http://localhost:3001`, the speaker app on `http://localhost:5173`, the audience app on `http://localhost:5174`, and the admin dashboard on `http://localhost:5175`. Set a private `ADMIN_API_KEY` in the backend environment; without it admin access is denied. Ensure `CORS_ORIGIN` includes those localhost frontend origins when testing locally.
 
 Or run the backend in Docker:
 
@@ -219,18 +236,39 @@ docker compose up --build
 
 ## Security
 
-This project uses Microsoft Entra ID authentication exclusively. **Never commit API keys, `.env` files, tokens, or credentials.**
+Azure runtime authentication uses Microsoft Entra ID. **Never commit API keys, `.env` files, tokens, or credentials.**
 
 - Local dev authenticates via `az login` (`DefaultAzureCredential`)
 - Production authenticates via Managed Identity on the Container App
 - The backend exchanges an Entra ID token for a short-lived (10-minute) Speech authorization token, which it returns to the browser — the browser never sees a key
 - The built-in `Cognitive Services Speech User` role does not include the `issueToken` data action; a least-privilege custom role (`Live Translation Speech Token Issuer`) is created and assigned by the deployment scripts
-- The admin dashboard (`client-admin/`) is the one exception to "no keys": it's gated by an `ADMIN_API_KEY` shared secret, since it has nothing to do with Azure resource access — it only exposes in-process room/connection counters. This key is generated at deploy time (or pinned via `-AdminApiKey`/`.env`), stored as a Container App secret, and never committed to the repo.
-- **Not yet implemented**: the `/api/speech-token` endpoint and the Socket.IO relay (join/publish) have no per-request caller authentication today — anyone who can reach the backend URL can request a Speech token or join/publish to any room by code. This is tracked as the top-priority item in `docs/scaling-plan.md`.
+- The admin dashboard uses a separately supplied private `ADMIN_API_KEY`, stored as a Container App secret. The browser remembers it in localStorage; avoid shared operator devices and clear it after use.
+- **Deliberately anonymous:** anyone who discovers the backend can request paid Speech tokens, join rooms or claim a vacant speaker registration. Room codes are not strong authorization. Validation and rate limits reduce abuse, but provide neither confidentiality, DDoS protection nor a hard spending cap. Use only for non-sensitive events with this exposure understood.
+- Token responses are not cacheable. Server request/error logs omit URLs, bodies, caption content and credential details. Do not enable verbose SDK/Socket.IO debug logging in production.
 
 ## Scaling & Capacity
 
-This app has been evaluated for 5 concurrent rooms (speakers) with up to 50 audience members each (250 concurrent connections total). At that scale, raw message throughput is not the constraint — a single backend instance comfortably handles the connection count and caption fan-out involved. The real risks are availability and security ones (a single crash-prone message path, an unauthenticated token/relay endpoint, and a scale-to-zero cold start), most of which are now addressed; see `docs/scaling-plan.md` for the full analysis, what's already fixed, and what's still open before running a live event at this scale.
+The target is **3 speakers and 30-50 audience per room** (153 participant connections at the normal maximum), with 60 audience per room as headroom. The single in-memory relay has no cross-replica synchronization or replay. Clients rejoin automatically after interruption, and the speaker re-registers before publishing; captions produced while disconnected are dropped.
+
+Limits per backend process: 12 rooms, 80 participants per room, 256 participant sockets and 8 admin sockets. Each socket can occupy one room, with 20 join/leave and 20 registration attempts per minute, and 40 publishes per second. Transport messages are limited to 64 KiB, captions to 60 KiB and each text value to 4,000 characters. Initially unjoined sockets time out after 30 seconds; empty rooms are removed immediately. HTTP limits are 120 Speech-token and 600 admin requests per minute, shared process-wide. They do not use client IP or trust forwarded headers, so a venue's shared IP does not receive a separate restrictive quota; an attacker can still exhaust the global budget.
+
+Local synthetic tests passed for five minutes at 3 x 50 audience and one minute at 3 x 60, with p95 relay latency 22 ms and 23 ms respectively. This is **not full event-duration, container or live-Speech validation**. See [the validation record](docs/local-validation.md) and [the approved plan](docs/scaling-plan.md) for remaining gates.
+
+### Local checks (no Azure calls)
+
+```powershell
+npm run typecheck
+npm run build
+npm run test:deployment
+npm test
+$env:LOAD_SECONDS='300'
+try { npm test } finally { Remove-Item Env:LOAD_SECONDS }
+$env:LOAD_AUDIENCES='60'
+$env:LOAD_SECONDS='60'
+try { npm test } finally { Remove-Item Env:LOAD_AUDIENCES; Remove-Item Env:LOAD_SECONDS }
+```
+
+Deployment tests mock Azure calls; the relay tests use synthetic text and a stub token route. Neither spends Speech quota. To recheck a deployed backend/frontends, `node scripts/deployment-smoke.mjs <api-url> <frontend-url>` uses `ADMIN_API_KEY` from the process environment and a disposable synthetic room, not Speech.
 
 ## Project Structure
 
@@ -242,7 +280,8 @@ live-translation-app/
 ├── shared/                    # Caption protocol, language catalog, realtime client
 ├── server/                    # Express backend (Dockerized)
 ├── docs/
-│   └── scaling-plan.md        # Bottleneck analysis and rollout plan for the 5-room/250-user target
+│   ├── scaling-plan.md        # Approved three-room scope and pre-event gates
+│   └── local-validation.md    # Local test evidence and unverified cloud checks
 ├── scripts/
 │   ├── setup-azure.ps1        # Provision Azure resources for local dev
 │   ├── deploy-azure.ps1       # Full deploy to Azure (provision + build + deploy)
