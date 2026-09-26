@@ -59,6 +59,10 @@ try {
 } finally { $env:SPEECH_SKU = $savedSku }
 
 . "$PSScriptRoot/deployment-checks.ps1"
+$tag = New-DeploymentTag
+Assert-Equal ($tag -match '^[a-z][a-z0-9-]*[a-z0-9]$') $true
+Assert-Equal ((('a' * 32) + '--' + $tag).Length -le 54) $true
+Assert-Equal ($tag -ne (New-DeploymentTag)) $true
 function New-DeploymentFixture {
     return @{
         App = @{ properties = @{ configuration = @{ activeRevisionsMode = 'Single' }; latestRevisionName = 'app--test'; latestReadyRevisionName = 'app--test' } }

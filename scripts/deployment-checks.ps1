@@ -1,3 +1,7 @@
+function New-DeploymentTag {
+    return "d-$([guid]::NewGuid().ToString('N').Substring(0, 18))"
+}
+
 function Assert-DeploymentState($App, $Revisions, [string]$Image) {
     if ($App.properties.configuration.activeRevisionsMode -ne 'Single') { throw 'Container App must use single revision mode.' }
     $active = @($Revisions | Where-Object { $_.properties.active })

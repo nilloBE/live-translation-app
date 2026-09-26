@@ -66,6 +66,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot/speech-resource.ps1"
+. "$PSScriptRoot/deployment-checks.ps1"
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -296,7 +297,7 @@ $adminApiKeyProvided = -not [string]::IsNullOrWhiteSpace((Get-Setting $AdminApiK
 $AdminApiKey = Get-Setting $AdminApiKey "ADMIN_API_KEY" ""
 
 $ImageName = "live-translation-api"
-$ImageTag = "deploy-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+$ImageTag = New-DeploymentTag
 $FullImageName = "$ContainerRegistryName.azurecr.io/${ImageName}:${ImageTag}"
 $SubscriptionId = Invoke-AzText account show --query id --output tsv
 
@@ -650,7 +651,6 @@ try {
 # ===========================================================================
 # Summary
 # ===========================================================================
-. "$PSScriptRoot/deployment-checks.ps1"
 Write-Host 'Verifying serving revision, replica limits and Speech SKU...'
 $deployedApp = Invoke-AzText containerapp show --name $ContainerAppName --resource-group $ResourceGroup --output json | ConvertFrom-Json
 $revisions = Invoke-AzText containerapp revision list --name $ContainerAppName --resource-group $ResourceGroup --output json | ConvertFrom-Json
