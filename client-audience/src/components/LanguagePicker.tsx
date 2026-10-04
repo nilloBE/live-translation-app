@@ -11,6 +11,7 @@ export function LanguagePicker({ strings, selectedLanguage, onSelect }: Language
   return (
     <section className="step-panel" aria-labelledby="language-title">
       <p className="eyebrow">Live Translation</p>
+      <p className="ai-disclaimer">{strings.aiDisclaimer}</p>
       <h1 id="language-title">{strings.chooseLanguage}</h1>
       <p className="supporting-text">{strings.chooseLanguageHint}</p>
       <div className="language-grid">

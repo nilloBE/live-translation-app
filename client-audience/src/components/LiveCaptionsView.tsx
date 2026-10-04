@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  downloadTranscript,
+  formatTranscriptText,
   getSourceLanguageName,
   getTargetLanguageName,
   targetLanguages,
   type CaptionMessage,
   type FinalizedCaption,
 } from "@live-translation/shared";
-import { ArrowDown, Languages, LogOut, Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
+import { ArrowDown, Download, Languages, LogOut, Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
 import type { ThemePreference } from "../hooks/useAudiencePreferences";
 import type { AudienceStrings } from "../i18n/strings";
 
@@ -88,6 +90,15 @@ export function LiveCaptionsView({
     historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight });
   }
 
+  function handleDownloadTranscript() {
+    downloadTranscript(formatTranscriptText({
+      history,
+      live,
+      targetLanguage: selectedTarget,
+      labels: strings,
+    }), roomId, selectedTarget);
+  }
+
   return (
     <section
       className="live-shell"
@@ -97,6 +108,7 @@ export function LiveCaptionsView({
       <header className="live-header">
         <div>
           <p className="eyebrow">{strings.appName}</p>
+          <p className="ai-disclaimer">{strings.aiDisclaimer}</p>
           <h1>{roomId}</h1>
         </div>
         <div className="header-actions">
@@ -121,6 +133,16 @@ export function LiveCaptionsView({
       </div>
 
       <div className="caption-toolbar">
+        <button
+          className="secondary-action download-action"
+          type="button"
+          onClick={handleDownloadTranscript}
+          disabled={history.length === 0 && !live?.originalText && !live?.translations[selectedTarget]}
+          title={strings.downloadTranscript}
+          aria-label={strings.downloadTranscript}
+        >
+          <Download aria-hidden="true" size={18} />
+        </button>
         <label className="target-select">
           <span>{strings.readIn}</span>
           <select value={selectedTarget} onChange={(event) => onSelectedTargetChange(event.target.value)}>

@@ -1,4 +1,4 @@
-import { Eraser, Mic, MicOff, Minus, Plus, Radio, Square } from "lucide-react";
+import { Download, Eraser, Mic, MicOff, Minus, Plus, Radio, Square } from "lucide-react";
 import type { FinalizedCaption } from "@live-translation/shared";
 import { StatusBadge } from "./StatusBadge";
 import {
@@ -27,6 +27,8 @@ interface SpeakerViewProps {
   onStart: () => void;
   onStop: () => void;
   onClear: () => void;
+  onDownload: () => void;
+  canDownload: boolean;
 }
 
 export function SpeakerView({
@@ -50,6 +52,8 @@ export function SpeakerView({
   onStart,
   onStop,
   onClear,
+  onDownload,
+  canDownload,
 }: SpeakerViewProps) {
   const activePreview = previewTarget ?? targetLanguages[0];
 
@@ -69,6 +73,16 @@ export function SpeakerView({
         <button className="secondary-action" type="button" onClick={onClear} disabled={isListening && isBusy}>
           <Eraser size={18} aria-hidden="true" />
           Clear
+        </button>
+        <button
+          className="secondary-action download-action"
+          type="button"
+          onClick={onDownload}
+          disabled={!canDownload}
+          title="Download transcript"
+          aria-label="Download transcript"
+        >
+          <Download size={18} aria-hidden="true" />
         </button>
         <div className="font-controls" role="group" aria-label="Text size">
           <span aria-hidden="true">Text size</span>

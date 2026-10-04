@@ -19,6 +19,7 @@ export function RoomPicker({
   return (
     <section className="step-panel" aria-labelledby="room-title">
       <p className="eyebrow">Live Translation</p>
+      <p className="ai-disclaimer">{strings.aiDisclaimer}</p>
       <h1 id="room-title">{strings.connectToRoom}</h1>
       <p className="supporting-text" id="room-help">{strings.roomCodeHint}</p>
       <form

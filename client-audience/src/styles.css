@@ -137,6 +137,28 @@ select:focus-visible {
   text-transform: uppercase;
 }
 
+.ai-disclaimer {
+  max-width: 64ch;
+  margin: 8px 0 12px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.secondary-action.download-action {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+}
+
+.download-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 h1,
 h2,
 p {
@@ -341,12 +363,26 @@ h2 {
 
 .caption-toolbar {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) auto auto;
+  grid-template-columns: 48px minmax(150px, 1fr) auto auto;
+  grid-template-areas: "download target font theme";
   align-items: end;
   gap: 12px;
 }
 
+.caption-toolbar .download-action {
+  grid-area: download;
+}
+
+.caption-toolbar .font-controls {
+  grid-area: font;
+}
+
+.caption-toolbar .theme-controls {
+  grid-area: theme;
+}
+
 .target-select {
+  grid-area: target;
   max-width: 300px;
 }
 
@@ -567,6 +603,7 @@ h2 {
 
   .caption-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "target download" "font theme";
   }
 
   .target-select {
@@ -574,7 +611,6 @@ h2 {
   }
 
   .theme-controls {
-    grid-column: 1 / -1;
     justify-content: flex-end;
   }
 
@@ -622,6 +658,7 @@ h2 {
     grid-row: 3;
     align-content: start;
     grid-template-columns: 1fr auto;
+    grid-template-areas: "target download" "font theme";
   }
 
   .subtitle-card {
