@@ -10,10 +10,9 @@ import {
 import { SessionControls } from "./components/SessionControls";
 import { SpeakerView } from "./components/SpeakerView";
 import {
-  createRealtimeConnection,
+  createSpeakerRelay,
   normalizeRoomId,
   type CaptionMessage,
-  type RealtimeConnection,
 } from "./services/realtime";
 import {
   startTranslationSession,
@@ -29,6 +28,28 @@ const fontStorageKey = "live-translation:speaker-font";
 const glossaryStorageKey = "live-translation:speaker-glossary";
 const themeStorageKey = "live-translation:speaker-theme";
 const maxGlossaryPhrases = 500;
+const defaultGlossaryText = [
+  "VASCAPA",
+  "CMV",
+  "Saint-Luc",
+  "VASCERN",
+  "ERN",
+  "EURORDIS",
+  "RaDiOrg",
+  "LUSS",
+  "MAV",
+  "h\u00e9mangiome",
+  "h\u00e9mangioendoth\u00e9liome",
+  "kaposiforme",
+  "propranolol",
+  "rapamycine",
+  "scl\u00e9roth\u00e9rapie",
+  "lymphangiome",
+  "t\u00e9langiectasique",
+  "Klippel-Tr\u00e9naunay",
+  "glomangiome",
+  "phl\u00e9bolithes",
+].join("\n");
 const captionHistoryLimit = 100;
 type ThemePreference = "system" | "light" | "dark";
 
@@ -51,8 +72,7 @@ export function App() {
   const [glossaryText, setGlossaryText] = useState(() => loadGlossary());
   const [theme, setTheme] = useState<ThemePreference>(loadTheme);
   const sessionRef = useRef<RunningTranslationSession | null>(null);
-  const speakerSocketRef = useRef<RealtimeConnection | null>(null);
-  const speakerRoomRef = useRef<string | null>(null);
+  const relayRef = useRef<ReturnType<typeof createSpeakerRelay> | null>(null);
 
   const roomId = useMemo(() => normalizeRoomId(roomInput), [roomInput]);
 
@@ -76,7 +96,7 @@ export function App() {
   useEffect(() => {
     return () => {
       void sessionRef.current?.stop();
-      speakerSocketRef.current?.disconnect();
+      relayRef.current?.stop();
     };
   }, []);
 
@@ -104,11 +124,12 @@ export function App() {
     setError(null);
     setNotice(null);
     setSpeechStatus("Connecting microphone");
-    connectSpeakerRelay();
 
     const sessionTargets = [...speakerTargets];
 
     try {
+      relayRef.current ??= createSpeakerRelay(apiBaseUrl, setRelayStatus, setAudienceCount, setError);
+      await relayRef.current.start({ roomId, sourceLanguage: speakerSource, targetLanguages: sessionTargets });
       sessionRef.current = await startTranslationSession({
         apiBaseUrl,
         sourceLanguage: speakerSource,
@@ -141,11 +162,12 @@ export function App() {
             setCaptionStream((current) => reduceCaptionStream(current, caption, captionHistoryLimit));
           }
 
-          publishCaption(caption);
+          relayRef.current?.publish(caption);
         },
       });
       setIsListening(true);
     } catch (caughtError) {
+      relayRef.current?.stop();
       setError(caughtError instanceof Error ? caughtError.message : "Unable to start translation.");
       setSpeechStatus("Needs attention");
     } finally {
@@ -168,56 +190,11 @@ export function App() {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to stop translation.");
     } finally {
       sessionRef.current = null;
+      relayRef.current?.stop();
       setIsListening(false);
       setIsBusy(false);
       setSpeechStatus("Ready");
     }
-  }
-
-  function connectSpeakerRelay() {
-    const socket = getSpeakerSocket();
-
-    if (speakerRoomRef.current && speakerRoomRef.current !== roomId) {
-      socket.emit("leave-room", speakerRoomRef.current);
-    }
-
-    speakerRoomRef.current = roomId;
-    socket.emit("join-room", roomId, (presence) => {
-      setAudienceCount(presence.audienceCount);
-      setRelayStatus("Relay connected");
-    });
-  }
-
-  function publishCaption(caption: CaptionMessage) {
-    if (Object.keys(caption.translations).length === 0) {
-      return;
-    }
-    const socket = getSpeakerSocket();
-    socket.emit("publish-caption", caption);
-  }
-
-  function getSpeakerSocket() {
-    if (!speakerSocketRef.current) {
-      speakerSocketRef.current = createRealtimeConnection(apiBaseUrl);
-      speakerSocketRef.current.on("connect", () => setRelayStatus("Relay connected"));
-      speakerSocketRef.current.on("disconnect", () => setRelayStatus("Relay disconnected"));
-      speakerSocketRef.current.on("connect_error", () => {
-        setRelayStatus("Relay failed");
-        setError("Unable to connect to the realtime caption relay.");
-      });
-      speakerSocketRef.current.on("room-presence", (presence) => {
-        if (presence.roomId === roomId) {
-          setAudienceCount(presence.audienceCount);
-        }
-      });
-    }
-
-    if (!speakerSocketRef.current.connected) {
-      setRelayStatus("Relay connecting");
-      speakerSocketRef.current.connect();
-    }
-
-    return speakerSocketRef.current;
   }
 
   function handleRoomInputChange(roomCode: string) {
@@ -410,9 +387,9 @@ function loadFontIndex() {
 
 function loadGlossary() {
   try {
-    return window.localStorage.getItem(glossaryStorageKey) ?? "";
+    return window.localStorage.getItem(glossaryStorageKey) ?? defaultGlossaryText;
   } catch {
-    return "";
+    return defaultGlossaryText;
   }
 }
 

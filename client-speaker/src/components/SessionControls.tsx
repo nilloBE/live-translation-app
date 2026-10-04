@@ -146,14 +146,14 @@ function GlossaryControl({ value, isLocked, onChange }: GlossaryControlProps) {
 
   return (
     <label className="glossary-input">
-      <span>Glossary (one term per line)</span>
+      <span>Recognition hints (one term per line)</span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={isLocked}
         rows={4}
         spellCheck={false}
-        placeholder={"AKS\nContoso\nKubernetes"}
+        placeholder={"VASCAPA\nCMV\nSaint-Luc"}
       />
       <small className="glossary-hint">
         {termCount} / 500 terms &middot; helps recognize acronyms &amp; names

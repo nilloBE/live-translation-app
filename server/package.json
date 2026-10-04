@@ -16,6 +16,7 @@
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
+    "express-rate-limit": "^8.7.0",
     "helmet": "latest",
     "morgan": "latest",
     "socket.io": "^4.8.3"
