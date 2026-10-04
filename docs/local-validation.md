@@ -119,3 +119,27 @@ not replayed. Keep a known-good revision for an operator-managed rollback.
 - This deployment is ready for manual dev testing, not yet signed off for a public
    event. Three live recognizers, two token renewals, real audience devices and
    full-duration venue/network/resource validation remain outstanding.
+
+## Transcript download deployment: 2026-10-04
+
+- Published frontend source `7788741a78ffec114753fbd00bddde34192000c8` from
+   `feature/transcript-download-ai-disclaimer` to the existing Static Web App
+   production environment. PR #2 remains open and unmerged.
+- Reused only the frontend build/publish block of `scripts/deploy-azure.ps1`.
+   Audience, speaker and admin retain their existing URLs above. No backend,
+   Speech, RBAC or infrastructure changes were made.
+- Backend remained healthy on revision
+   `api-live-translation-dev--d-f0f4847a82c34a39a1` before and after publishing.
+- All six transcript regression tests, workspace typechecks and three production
+   client builds passed. All nine published HTML/JS/CSS files matched their local
+   production builds by SHA-256.
+- Live deployment smoke passed, including authenticated admin REST/socket checks
+   and disposable synthetic caption delivery. No Speech request or audio was sent.
+- Live browser checks confirmed the speaker AI notice, download control and all
+   20 recognition hints. The French audience AI notice directly follows
+   "Sous-titres en direct"; empty transcript downloads are disabled. The temporary
+   audience room was left after verification.
+- Download text generation and browser helper behavior are covered by local
+   tests. Native operating-system save completion and real microphone recognition
+   were not verified. Existing event-readiness gates and dependency advisories
+   remain open; the speaker build still reports its large-bundle warning.
