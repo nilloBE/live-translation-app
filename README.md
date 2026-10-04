@@ -71,9 +71,11 @@ A single session can translate into multiple target languages simultaneously. Ea
 
 ### Prerequisites
 
-- Node.js 20 or later and npm 10 or later
+- Node.js 24 LTS (recommended; matches the backend Docker image) and its bundled npm
 - Azure CLI, signed in with an account that can create resources and assign RBAC roles
 - An Azure subscription that allows Container Apps, ACR, Speech, and Static Web Apps
+
+The Azure SDK dependencies resolved during the latest container build require Node.js 22 or later. Do not rely on the root package's older `>=20.0.0` engine declaration; use Node.js 24 LTS for this workflow. The Docker build uses `npm install --engine-strict` to reject incompatible dependencies.
 
 ```powershell
 az login
@@ -91,7 +93,7 @@ First configure a private `ADMIN_API_KEY` in your environment or ignored root `.
 The script performs these steps automatically:
 1. Creates or reuses the resource group
 2. Creates or updates Speech with verified SKU selection, then provisions Container Registry, Container Apps Environment, and Static Web App
-3. Builds a uniquely tagged backend image via ACR Tasks (no local Docker required)
+3. Builds a Node.js 24 LTS backend image via ACR Tasks (no local Docker required), using a unique 20-character tag that also fits Azure's revision-name limit
 4. Installs/preserves the admin secret before deploying a single-revision Container App with Managed Identity and minimum/maximum replicas both set to 1
 5. Assigns RBAC roles: `Cognitive Services Speech User`, `Live Translation Speech Token Issuer` (custom), `AcrPull`
 6. Builds all three frontend apps with the backend URL configured
@@ -108,6 +110,18 @@ When complete, the script prints the live URLs:
 - **Backend API**: `https://<container-app-fqdn>/`
 
 The admin dashboard uses a private `ADMIN_API_KEY` unrelated to Azure resource access. Omission preserves the existing Container App secret. Supplying a value installs/rotates it before the new revision starts; it is never printed. Prefer a private environment value or ignored root `.env` to a literal command-line secret. If the existing key is preserved but not available locally, the deployment smoke explicitly leaves authenticated admin verification open; check the dashboard with that key before the event.
+
+### Last recorded Azure validation
+
+The dev deployment on **2026-09-26**, from application commit `cab401b`, passed the following checks:
+
+- In-place Speech upgrade from F0 to paid S0, with actual tier readback.
+- One healthy serving revision with min/max replicas set to 1 and one actual ready replica (0.5 vCPU / 1 GiB).
+- Frontend routes and all nine published HTML/JS/CSS files matching the local builds.
+- Synthetic caption delivery, audience counts, anonymous admin rejection and authenticated admin REST/socket access.
+- Real Managed Identity Speech-token exchange, expiry metadata, `Cache-Control: no-store` and frontend CORS. No microphone audio was sent.
+
+These are dated verification results, not a current service-health check or public-event sign-off. Three simultaneous real Speech sessions, at least two token renewals, real audience devices, full-event-duration testing and dependency remediation remain open. See [the deployment and validation record](docs/local-validation.md) for endpoints, image/revision details and remaining gates.
 
 ### Speech tier selection
 
@@ -189,8 +203,7 @@ Snapshots older than six seconds are marked stale while connected. Disconnection
 
 ### Prerequisites
 
-- Node.js 20 or later, npm 10 or later
-- Docker Desktop (optional, for running the backend in a container)
+- Node.js 24 LTS and its bundled npm
 - Azure CLI signed in (`az login`) with an Azure AI Speech resource provisioned
 
 ### Set up Azure resources for local development
@@ -219,6 +232,8 @@ SPEECH_ENDPOINT=https://<your-speech-resource>.cognitiveservices.azure.com
 
 > `SPEECH_ENDPOINT` must be the custom subdomain endpoint, not the regional key endpoint.
 
+The deployment scripts read the root `.env`; the backend started by the npm workspace command reads `server/.env`. Configure local backend values there or in the process environment rather than assuming the root deployment settings are loaded. Use a separate private admin key for local testing and include the localhost frontend origins in `CORS_ORIGIN`.
+
 ### Run
 
 ```powershell
@@ -228,11 +243,15 @@ npm run dev
 
 This starts the backend on `http://localhost:3001`, the speaker app on `http://localhost:5173`, the audience app on `http://localhost:5174`, and the admin dashboard on `http://localhost:5175`. Set a private `ADMIN_API_KEY` in the backend environment; without it admin access is denied. Ensure `CORS_ORIGIN` includes those localhost frontend origins when testing locally.
 
-Or run the backend in Docker:
+### Docker Compose (unvalidated development path)
+
+The Compose file starts the backend and all three frontend apps, not just the backend:
 
 ```powershell
 docker compose up --build
 ```
+
+This path requires Docker Desktop and has not been validated end-to-end. Its frontend services still use Node.js 20 images, it does not forward `SPEECH_ENDPOINT` to the backend, and mounting the host's Azure configuration alone does not provide the Azure CLI executable required by `AzureCliCredential` inside the Node image. Use the host-based workflow above for local Speech testing until these gaps are addressed. The Compose default admin key is for isolated local development only.
 
 ## Security
 
@@ -246,13 +265,15 @@ Azure runtime authentication uses Microsoft Entra ID. **Never commit API keys, `
 - **Deliberately anonymous:** anyone who discovers the backend can request paid Speech tokens, join rooms or claim a vacant speaker registration. Room codes are not strong authorization. Validation and rate limits reduce abuse, but provide neither confidentiality, DDoS protection nor a hard spending cap. Use only for non-sensitive events with this exposure understood.
 - Token responses are not cacheable. Server request/error logs omit URLs, bodies, caption content and credential details. Do not enable verbose SDK/Socket.IO debug logging in production.
 
+The root dependency audit recorded on **2026-09-26** reported **16 advisories** (2 low, 7 moderate, 5 high, 2 critical). The critical findings were in local development tooling (`concurrently` and `shell-quote`); other findings included client dependencies. The isolated backend image's zero-advisory build result does not clear the whole repository. Reassess and remediate dependencies before a public event; these counts are historical, not a fresh audit.
+
 ## Scaling & Capacity
 
 The target is **3 speakers and 30-50 audience per room** (153 participant connections at the normal maximum), with 60 audience per room as headroom. The single in-memory relay has no cross-replica synchronization or replay. Clients rejoin automatically after interruption, and the speaker re-registers before publishing; captions produced while disconnected are dropped.
 
 Limits per backend process: 12 rooms, 80 participants per room, 256 participant sockets and 8 admin sockets. Each socket can occupy one room, with 20 join/leave and 20 registration attempts per minute, and 40 publishes per second. Transport messages are limited to 64 KiB, captions to 60 KiB and each text value to 4,000 characters. Initially unjoined sockets time out after 30 seconds; empty rooms are removed immediately. HTTP limits are 120 Speech-token and 600 admin requests per minute, shared process-wide. They do not use client IP or trust forwarded headers, so a venue's shared IP does not receive a separate restrictive quota; an attacker can still exhaust the global budget.
 
-Local synthetic tests passed for five minutes at 3 x 50 audience and one minute at 3 x 60, with p95 relay latency 22 ms and 23 ms respectively. This is **not full event-duration, container or live-Speech validation**. See [the validation record](docs/local-validation.md) and [the approved plan](docs/scaling-plan.md) for remaining gates.
+Local synthetic tests passed for five minutes at 3 x 50 audience and one minute at 3 x 60, with p95 relay latency 22 ms and 23 ms respectively. These are loopback relay results, **not Azure load-test or Speech translation latency measurements**. The later Azure deployment passed the smoke checks above, but full-duration container load and real multi-speaker Speech validation remain open. See [the validation record](docs/local-validation.md) and [the approved plan](docs/scaling-plan.md) for remaining gates.
 
 ### Local checks (no Azure calls)
 
@@ -281,12 +302,17 @@ live-translation-app/
 ├── server/                    # Express backend (Dockerized)
 ├── docs/
 │   ├── scaling-plan.md        # Approved three-room scope and pre-event gates
-│   └── local-validation.md    # Local test evidence and unverified cloud checks
+│   └── local-validation.md    # Local and Azure verification evidence, open gates
 ├── scripts/
 │   ├── setup-azure.ps1        # Provision Azure resources for local dev
 │   ├── deploy-azure.ps1       # Full deploy to Azure (provision + build + deploy)
+│   ├── speech-resource.ps1    # Speech SKU selection, transitions and readback
+│   ├── deployment-checks.ps1  # Revision-safe tags and serving-state assertions
+│   ├── deployment-smoke.mjs   # Health, frontend, relay and admin smoke checks
+│   ├── test-speech-resource.ps1 # Mocked deployment tests and PowerShell parsing
+│   ├── test-realtime.mjs      # Synthetic relay, limits and reconnect tests
 │   └── cleanup-azure.ps1      # Delete all Azure resources
-├── docker-compose.yml         # Local containerized backend
+├── docker-compose.yml         # Unvalidated backend + three-frontend dev stack
 ├── .env.example               # Shared non-secret placeholders
 └── README.md
 ```
