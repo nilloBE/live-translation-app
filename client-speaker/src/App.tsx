@@ -28,6 +28,28 @@ const fontStorageKey = "live-translation:speaker-font";
 const glossaryStorageKey = "live-translation:speaker-glossary";
 const themeStorageKey = "live-translation:speaker-theme";
 const maxGlossaryPhrases = 500;
+const defaultGlossaryText = [
+  "VASCAPA",
+  "CMV",
+  "Saint-Luc",
+  "VASCERN",
+  "ERN",
+  "EURORDIS",
+  "RaDiOrg",
+  "LUSS",
+  "MAV",
+  "h\u00e9mangiome",
+  "h\u00e9mangioendoth\u00e9liome",
+  "kaposiforme",
+  "propranolol",
+  "rapamycine",
+  "scl\u00e9roth\u00e9rapie",
+  "lymphangiome",
+  "t\u00e9langiectasique",
+  "Klippel-Tr\u00e9naunay",
+  "glomangiome",
+  "phl\u00e9bolithes",
+].join("\n");
 const captionHistoryLimit = 100;
 type ThemePreference = "system" | "light" | "dark";
 
@@ -365,9 +387,9 @@ function loadFontIndex() {
 
 function loadGlossary() {
   try {
-    return window.localStorage.getItem(glossaryStorageKey) ?? "";
+    return window.localStorage.getItem(glossaryStorageKey) ?? defaultGlossaryText;
   } catch {
-    return "";
+    return defaultGlossaryText;
   }
 }
 
