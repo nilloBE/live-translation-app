@@ -3,6 +3,7 @@ import {
   normalizeRoomId,
 } from "@live-translation/shared";
 import { LanguagePicker } from "./components/LanguagePicker";
+import { AudienceHelp } from "./components/AudienceHelp";
 import { buildTargetOptions, LiveCaptionsView } from "./components/LiveCaptionsView";
 import { RoomPicker } from "./components/RoomPicker";
 import {
@@ -65,6 +66,16 @@ export function App() {
 
   return (
     <main className="audience-app">
+      {step !== "live" ? (
+        <div className="setup-help">
+          <AudienceHelp
+            language={preferences.uiLanguage ?? "en"}
+            theme={preferences.theme}
+            strings={activeStrings}
+            showLabel
+          />
+        </div>
+      ) : null}
       {step === "language" ? (
         <LanguagePicker
           strings={activeStrings}
@@ -86,6 +97,7 @@ export function App() {
       {step === "live" ? (
         <LiveCaptionsView
           roomId={roomId}
+          uiLanguage={preferences.uiLanguage ?? "en"}
           live={captionStream.live}
           latestCaption={latestCaption}
           history={captionStream.history}

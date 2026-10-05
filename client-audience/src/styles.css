@@ -377,8 +377,79 @@ h2 {
   grid-area: font;
 }
 
-.caption-toolbar .theme-controls {
+.caption-toolbar .viewer-tools {
   grid-area: theme;
+}
+
+.viewer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.help-trigger:not(.help-with-label) {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+}
+
+.setup-help {
+  display: flex;
+  justify-content: flex-end;
+  width: min(100%, 620px);
+  margin: 0 auto;
+  padding: 8px 14px;
+}
+
+.setup-help + .step-panel {
+  margin-top: 12px;
+}
+
+.help-dialog {
+  width: min(760px, calc(100% - 24px));
+  height: min(800px, calc(100dvh - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.help-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.help-dialog::backdrop {
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.help-dialog-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-dialog-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.help-dialog iframe {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
 }
 
 .target-select {
@@ -559,6 +630,11 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .setup-help + .step-panel {
+    min-height: calc(100dvh - 64px);
+    margin-top: 0;
+  }
+
   .language-button {
     min-height: 64px;
   }
@@ -631,14 +707,18 @@ h2 {
   }
 
   .font-controls,
-  .theme-controls {
-    gap: 6px;
+  .theme-controls,
+  .viewer-tools {
+    gap: 4px;
   }
 
   .font-controls button,
-  .theme-controls button {
+  .theme-controls button,
+  .viewer-tools > .help-trigger {
     width: 44px;
     height: 44px;
+    min-height: 44px;
+    flex-basis: 44px;
   }
 }
 
@@ -658,7 +738,7 @@ h2 {
     grid-row: 3;
     align-content: start;
     grid-template-columns: 1fr auto;
-    grid-template-areas: "target download" "font theme";
+    grid-template-areas: "target download" "font font" "theme theme";
   }
 
   .subtitle-card {

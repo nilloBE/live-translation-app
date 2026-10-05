@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Translation - Audience guide</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--cp-surface);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 1rem;
+      line-height: 1.65;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 24px; }
+    .language-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .brand { margin: 0; font-size: 1rem; font-weight: 700; }
+    select {
+      max-width: 100%; min-height: 44px; padding: 8px 12px;
+      color: var(--cp-text); background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border-strong); border-radius: 6px; font: inherit;
+    }
+    select:focus-visible { outline: 3px solid var(--cp-link); outline-offset: 3px; }
+    h1 { margin: 24px 0 8px; font-size: 1.75rem; line-height: 1.25; }
+    h2 { margin: 0 0 8px; font-size: 1.15rem; line-height: 1.4; }
+    p { margin: 0 0 12px; }
+    .intro { color: var(--cp-text-muted); }
+    ol { list-style: none; counter-reset: step; margin: 24px 0; padding: 0; }
+    li { counter-increment: step; position: relative; padding: 20px 0 12px 44px; border-top: 1px solid var(--cp-border); }
+    li::before {
+      content: counter(step); position: absolute; top: 20px; left: 0;
+      display: grid; place-items: center; width: 28px; height: 28px;
+      border-radius: 6px; background: var(--cp-accent-soft); color: var(--cp-accent); font-weight: 700;
+    }
+    kbd, code { font-family: Consolas, "Courier New", Courier, monospace; }
+    kbd { display: inline-block; min-width: 28px; padding: 0 6px; text-align: center; border: 1px solid var(--cp-border-strong); border-radius: 4px; }
+    .notice { border-left: 3px solid var(--cp-accent); padding: 12px 16px; background: var(--cp-accent-soft); }
+    [hidden] { display: none !important; }
+    @media (max-width: 420px) { main { padding: 16px; } li { padding-left: 38px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="language-bar">
+      <p class="brand">Live Translation</p>
+      <select id="guide-language" aria-label="Guide language">
+        <option value="fr" lang="fr">Fran&ccedil;ais</option>
+        <option value="en" lang="en" selected>English</option>
+        <option value="nl" lang="nl">Nederlands</option>
+      </select>
+    </header>
+
+    <article lang="en" data-language="en" data-language-label="Guide language">
+      <h1>Audience guide</h1>
+      <p class="intro">Follow the speaker in your language, revisit recent captions, and keep a copy when you finish.</p>
+      <ol>
+        <li><h2>Join the speaker's room</h2>
+          <p>Open the audience link shared by the organiser. Choose <strong>English</strong>, <strong>Fran&ccedil;ais</strong>, or <strong>Nederlands</strong> for the interface.</p>
+          <p>Enter the speaker's <strong>Room code</strong>, for example <code>LIVE-ABCD</code>, and select <strong>Connect</strong>. Use the code for your session, not this example. Check that the code at the top matches the speaker's room.</p>
+        </li>
+        <li><h2>Choose your translation</h2>
+          <p>Use <strong>Read in</strong> to choose the language you want to read. It can be different from the interface language. While the speaker is broadcasting, the choices reflect the languages they offer.</p>
+          <p>You do not need to turn on your microphone. If you see <strong>Waiting for captions</strong>, wait for the speaker to start. If the connection fails, check your internet connection and the room code with the organiser.</p>
+        </li>
+        <li><h2>Make the text comfortable to read</h2>
+          <p>Under <strong>Text size</strong>, tap <kbd>+</kbd> to enlarge the live captions and history, or <kbd>-</kbd> to reduce them. A disabled button means you have reached the smallest or largest size.</p>
+          <p>The moon selects dark mode, the sun selects light mode, and the monitor follows your device's theme. Your size and theme choices are remembered in this browser.</p>
+        </li>
+        <li><h2>Follow live captions and browse history</h2>
+          <p>The large caption area shows the current translation, with the original transcription underneath. Text may change while the speaker is finishing a sentence.</p>
+          <p><strong>Recent captions</strong> contains completed captions in your selected translation language. Scroll inside that area to read older entries. When you scroll away from the bottom, automatic following pauses; select <strong>Return to live</strong> to catch up. On a phone, turn the screen upright if the history is hidden in landscape.</p>
+        </li>
+        <li><h2>Download before you leave</h2>
+          <p>At the end, wait for the last caption to settle and choose your preferred <strong>Read in</strong> language. Tap the downward-arrow download icon beside that selector. Its label is <strong>Download transcript</strong>.</p>
+          <p>Your browser downloads a <code>.txt</code> file containing the original transcription and that translation. Look in your browser's downloads; on a phone, use its download or file-saving options. The button is disabled until captions are available. You can also download during the session.</p>
+          <p><strong>Download before leaving the room, changing the interface language, refreshing, or closing the page.</strong> A file contains up to 100 completed captions retained in this browser plus the current unfinished caption. It is not a full-session archive: captions from before you joined, cleared captions, and older discarded entries cannot be recovered.</p>
+        </li>
+        <li><h2>Return to the session</h2>
+          <p>If you opened this guide from the app, close the help window with the cross at the top or press <kbd>Esc</kbd>. Opening help does not leave your room. When you have saved your transcript, use <strong>Leave room</strong> to exit or enter another room code.</p>
+        </li>
+      </ol>
+      <p class="notice">Transcription and translation are generated by artificial intelligence (AI) and may contain errors. Every downloaded file starts with an AI disclaimer. Check important details with the speaker.</p>
+    </article>
+
+    <article lang="fr" data-language="fr" data-language-label="Langue du guide" hidden>
+      <h1>Guide du public</h1>
+      <p class="intro">Suivez l'orateur dans votre langue, relisez les sous-titres r&eacute;cents et conservez une copie &agrave; la fin.</p>
+      <ol>
+        <li><h2>Rejoindre la salle de l'orateur</h2>
+          <p>Ouvrez le lien du public partag&eacute; par l'organisateur. Choisissez <strong>Fran&ccedil;ais</strong>, <strong>English</strong> ou <strong>Nederlands</strong> pour l'interface.</p>
+          <p>Saisissez le <strong>Code de salle</strong> donn&eacute; par l'orateur, par exemple <code>LIVE-ABCD</code>, puis appuyez sur <strong>Se connecter</strong>. Utilisez le code de votre session, pas cet exemple. V&eacute;rifiez que le code affich&eacute; en haut correspond &agrave; la salle de l'orateur.</p>
+        </li>
+        <li><h2>Choisir la langue de traduction</h2>
+          <p>Dans <strong>Lire en</strong>, choisissez la langue que vous souhaitez lire. Elle peut &ecirc;tre diff&eacute;rente de la langue de l'interface. Pendant la diffusion, les choix correspondent aux langues propos&eacute;es par l'orateur.</p>
+          <p>Vous n'avez pas besoin d'activer votre microphone. Si <strong>En attente des sous-titres</strong> s'affiche, attendez que l'orateur commence. En cas d'&eacute;chec de connexion, v&eacute;rifiez votre acc&egrave;s &agrave; Internet et le code de salle avec l'organisateur.</p>
+        </li>
+        <li><h2>Adapter la taille du texte</h2>
+          <p>Dans <strong>Taille du texte</strong>, appuyez sur <kbd>+</kbd> pour agrandir les sous-titres et l'historique, ou sur <kbd>-</kbd> pour les r&eacute;duire. Un bouton d&eacute;sactiv&eacute; indique que la taille minimale ou maximale est atteinte.</p>
+          <p>La lune active le th&egrave;me sombre, le soleil le th&egrave;me clair et l'&eacute;cran suit le th&egrave;me de votre appareil. Ce navigateur m&eacute;morise la taille et le th&egrave;me choisis.</p>
+        </li>
+        <li><h2>Suivre le direct et relire l'historique</h2>
+          <p>La grande zone de sous-titres affiche la traduction en cours, avec la transcription originale en dessous. Le texte peut &eacute;voluer tant que l'orateur n'a pas termin&eacute; sa phrase.</p>
+          <p><strong>Sous-titres r&eacute;cents</strong> affiche les sous-titres termin&eacute;s dans la langue de traduction s&eacute;lectionn&eacute;e. Faites d&eacute;filer cette zone pour relire les passages pr&eacute;c&eacute;dents. Lorsque vous remontez, le suivi automatique se met en pause ; appuyez sur <strong>Revenir au direct</strong> pour retrouver les derniers sous-titres. Sur t&eacute;l&eacute;phone, remettez l'&eacute;cran &agrave; la verticale si l'historique est masqu&eacute; en mode paysage.</p>
+        </li>
+        <li><h2>T&eacute;l&eacute;charger avant de quitter</h2>
+          <p>&Agrave; la fin, attendez que le dernier sous-titre se stabilise et choisissez la langue voulue dans <strong>Lire en</strong>. Appuyez sur l'ic&ocirc;ne de t&eacute;l&eacute;chargement, une fl&egrave;che vers le bas, &agrave; c&ocirc;t&eacute; de ce s&eacute;lecteur. Son libell&eacute; est <strong>T&eacute;l&eacute;charger la transcription</strong>.</p>
+          <p>Votre navigateur t&eacute;l&eacute;charge un fichier <code>.txt</code> contenant la transcription originale et cette traduction. Retrouvez-le dans les t&eacute;l&eacute;chargements du navigateur ; sur t&eacute;l&eacute;phone, utilisez ses options de t&eacute;l&eacute;chargement ou d'enregistrement. Le bouton reste d&eacute;sactiv&eacute; tant qu'aucun sous-titre n'est disponible. Vous pouvez aussi t&eacute;l&eacute;charger pendant la session.</p>
+          <p><strong>T&eacute;l&eacute;chargez avant de quitter la salle, de changer la langue de l'interface, d'actualiser ou de fermer la page.</strong> Le fichier contient jusqu'&agrave; 100 sous-titres termin&eacute;s conserv&eacute;s dans ce navigateur, plus le sous-titre en cours. Ce n'est pas une archive compl&egrave;te : les sous-titres ant&eacute;rieurs &agrave; votre arriv&eacute;e, effac&eacute;s ou trop anciens ne sont pas r&eacute;cup&eacute;rables.</p>
+        </li>
+        <li><h2>Revenir &agrave; la session</h2>
+          <p>Si vous avez ouvert ce guide depuis l'application, fermez l'aide avec la croix en haut ou la touche <kbd>&Eacute;chap</kbd>. Ouvrir l'aide ne vous fait pas quitter la salle. Apr&egrave;s avoir enregistr&eacute; la transcription, utilisez <strong>Quitter la salle</strong> pour sortir ou saisir un autre code.</p>
+        </li>
+      </ol>
+      <p class="notice">La transcription et la traduction sont g&eacute;n&eacute;r&eacute;es par l'intelligence artificielle (IA) et peuvent contenir des erreurs. Chaque fichier t&eacute;l&eacute;charg&eacute; commence par un avertissement sur l'IA. V&eacute;rifiez les informations importantes avec l'orateur.</p>
+    </article>
+
+    <article lang="nl" data-language="nl" data-language-label="Taal van de handleiding" hidden>
+      <h1>Handleiding voor het publiek</h1>
+      <p class="intro">Volg de spreker in je eigen taal, lees recente ondertitels terug en bewaar na afloop een kopie.</p>
+      <ol>
+        <li><h2>Deelnemen aan de ruimte van de spreker</h2>
+          <p>Open de publiekslink van de organisator. Kies <strong>Nederlands</strong>, <strong>Fran&ccedil;ais</strong> of <strong>English</strong> voor de interface.</p>
+          <p>Vul de <strong>Ruimtecode</strong> van de spreker in, bijvoorbeeld <code>LIVE-ABCD</code>, en kies <strong>Verbinden</strong>. Gebruik de code van jouw sessie, niet dit voorbeeld. Controleer of de code bovenaan overeenkomt met de ruimte van de spreker.</p>
+        </li>
+        <li><h2>Je vertaaltaal kiezen</h2>
+          <p>Kies bij <strong>Lees in</strong> de taal waarin je wilt lezen. Die mag verschillen van de interfacetaal. Tijdens de uitzending zie je de talen die de spreker aanbiedt.</p>
+          <p>Je hoeft je microfoon niet aan te zetten. Zie je <strong>Wachten op ondertitels</strong>, wacht dan tot de spreker begint. Lukt de verbinding niet, controleer dan je internetverbinding en vraag de organisator of de ruimtecode klopt.</p>
+        </li>
+        <li><h2>De tekst leesbaar maken</h2>
+          <p>Tik bij <strong>Tekstgrootte</strong> op <kbd>+</kbd> om de live ondertitels en de geschiedenis te vergroten, of op <kbd>-</kbd> om ze te verkleinen. Een uitgeschakelde knop betekent dat de kleinste of grootste tekstgrootte is bereikt.</p>
+          <p>De maan kiest het donkere thema, de zon het lichte thema en het scherm volgt het thema van je apparaat. Deze browser onthoudt je tekstgrootte en thema.</p>
+        </li>
+        <li><h2>Live volgen en eerdere ondertitels teruglezen</h2>
+          <p>Het grote ondertitelvak toont de huidige vertaling, met de oorspronkelijke transcriptie eronder. De tekst kan nog veranderen zolang de spreker de zin niet heeft afgemaakt.</p>
+          <p>Onder <strong>Recente ondertitels</strong> staan afgeronde ondertitels in je gekozen vertaaltaal. Scroll in dat gedeelte om eerdere tekst te lezen. Zodra je omhoog scrolt, pauzeert het automatisch volgen. Kies <strong>Terug naar live</strong> om weer de nieuwste ondertitels te volgen. Draai je telefoon rechtop als de geschiedenis in liggende stand verborgen is.</p>
+        </li>
+        <li><h2>Downloaden voordat je vertrekt</h2>
+          <p>Wacht na afloop tot de laatste ondertitel is afgerond en kies de gewenste taal bij <strong>Lees in</strong>. Tik op het downloadpictogram met de pijl omlaag naast die keuzelijst. Het label is <strong>Transcriptie downloaden</strong>.</p>
+          <p>Je browser downloadt een <code>.txt</code>-bestand met de oorspronkelijke transcriptie en die vertaling. Kijk bij de downloads van je browser; gebruik op een telefoon de download- of opslagopties. De knop is uitgeschakeld totdat er ondertitels zijn. Je kunt ook tijdens de sessie downloaden.</p>
+          <p><strong>Download voordat je de ruimte verlaat, de interfacetaal wijzigt, de pagina vernieuwt of sluit.</strong> Het bestand bevat maximaal 100 afgeronde ondertitels die deze browser bewaart, plus de huidige onafgeronde ondertitel. Het is geen volledig sessiearchief: tekst van voor je aankomst, gewiste tekst en oudere verwijderde ondertitels kun je niet terughalen.</p>
+        </li>
+        <li><h2>Terug naar de sessie</h2>
+          <p>Heb je deze handleiding vanuit de app geopend, sluit dan de hulp met het kruisje bovenaan of druk op <kbd>Esc</kbd>. Door hulp te openen verlaat je de ruimte niet. Kies na het opslaan van je transcriptie <strong>Ruimte verlaten</strong> om te vertrekken of een andere ruimtecode in te voeren.</p>
+        </li>
+      </ol>
+      <p class="notice">Transcriptie en vertaling worden gegenereerd door kunstmatige intelligentie (AI) en kunnen fouten bevatten. Elk gedownload bestand begint met een AI-disclaimer. Controleer belangrijke informatie bij de spreker.</p>
+    </article>
+  </main>
+  <script>
+    const selector = document.getElementById("guide-language");
+    const articles = Array.from(document.querySelectorAll("[data-language]"));
+    function selectLanguage(value) {
+      const language = ["fr", "en", "nl"].includes(value) ? value : "en";
+      document.documentElement.lang = language;
+      selector.value = language;
+      for (const article of articles) {
+        article.hidden = article.dataset.language !== language;
+        if (!article.hidden) {
+          document.title = `Live Translation - ${article.querySelector("h1").textContent}`;
+          selector.setAttribute("aria-label", article.dataset.languageLabel);
+        }
+      }
+    }
+    selectLanguage(new URLSearchParams(window.location.search).get("lang"));
+    selector.addEventListener("change", () => {
+      selectLanguage(selector.value);
+      const url = new URL(window.location.href);
+      url.searchParams.set("lang", selector.value);
+      window.history.replaceState(null, "", url);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && window.parent !== window) {
+        window.parent.postMessage({ type: "audience-help-close" }, window.location.origin);
+      }
+    });
+  </script>
+</body>
+</html>

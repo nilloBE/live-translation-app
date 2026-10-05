@@ -4,6 +4,8 @@ export type UiLanguage = "fr" | "nl" | "en";
 
 export interface AudienceStrings extends TranscriptLabels {
   appName: string;
+  help: string;
+  closeHelp: string;
   downloadTranscript: string;
   chooseLanguage: string;
   chooseLanguageHint: string;
@@ -48,6 +50,8 @@ export const uiLanguages: Array<{ code: UiLanguage; label: string; targetCode: s
 export const strings: Record<UiLanguage, AudienceStrings> = {
   fr: {
     appName: "Sous-titres en direct",
+    help: "Aide",
+    closeHelp: "Fermer l'aide",
     aiDisclaimer: "Transcription et traduction générées par l'intelligence artificielle (IA).",
     originalText: "Transcription originale",
     translatedText: "Traduction",
@@ -87,6 +91,8 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
   },
   nl: {
     appName: "Live ondertitels",
+    help: "Hulp",
+    closeHelp: "Hulp sluiten",
     aiDisclaimer: "Transcriptie en vertaling gegenereerd door kunstmatige intelligentie (AI).",
     originalText: "Oorspronkelijke transcriptie",
     translatedText: "Vertaling",
@@ -127,6 +133,8 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
   en: {
     ...englishTranscriptLabels,
     appName: "Live captions",
+    help: "Help",
+    closeHelp: "Close help",
     downloadTranscript: "Download transcript",
     chooseLanguage: "Choose your language",
     chooseLanguageHint: "This sets the interface language. You can choose the transcription language separately.",

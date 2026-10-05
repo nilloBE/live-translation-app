@@ -194,6 +194,8 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 
 The audience app is designed for phone, tablet, and desktop screens. It shows connection and speaker-language status, reconnects automatically after transient network interruptions, and remembers the UI language, room code, caption language, text size, and theme between visits.
 
+The **Help** question-mark icon beside the theme controls opens a French, English, or Dutch audience guide without leaving the room or interrupting captions. Help is also available before joining. It opens in the interface language, follows the selected theme, and has its own language selector. Close it with the cross or Escape. The standalone [HTML guide](client-audience/public/help.html) is served at `/help.html` (locally, `http://localhost:5174/help.html?lang=en`; use `fr` or `nl` for the other languages). This help feature is a local addition and is not part of the latest recorded deployment above.
+
 ### Transcript downloads and AI disclosure
 
 The speaker and audience views show a visible AI-generation notice. Use the downward-arrow download icon next to **Clear** in the speaker console, or beside the **Read in** selector in the audience view, to save a UTF-8 `.txt` snapshot containing the original transcription and the currently selected translation (the speaker's preview tab or the audience's **Read in** language). Downloads work while captions are arriving or after stopping/disconnecting; the button is disabled until text is available. Hover over the icon to see its localized download label.

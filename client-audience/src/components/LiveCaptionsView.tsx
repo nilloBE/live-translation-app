@@ -10,10 +10,12 @@ import {
 } from "@live-translation/shared";
 import { ArrowDown, Download, Languages, LogOut, Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
 import type { ThemePreference } from "../hooks/useAudiencePreferences";
-import type { AudienceStrings } from "../i18n/strings";
+import type { AudienceStrings, UiLanguage } from "../i18n/strings";
+import { AudienceHelp } from "./AudienceHelp";
 
 interface LiveCaptionsViewProps {
   roomId: string;
+  uiLanguage: UiLanguage;
   live: CaptionMessage | null;
   latestCaption: CaptionMessage | undefined;
   history: FinalizedCaption[];
@@ -36,6 +38,7 @@ interface LiveCaptionsViewProps {
 
 export function LiveCaptionsView({
   roomId,
+  uiLanguage,
   live,
   latestCaption,
   history,
@@ -164,28 +167,31 @@ export function LiveCaptionsView({
           </button>
         </div>
 
-        <div className="theme-controls" role="group" aria-label={strings.theme}>
-          <ThemeButton
-            label={strings.systemTheme}
-            active={theme === "system"}
-            onClick={() => onThemeChange("system")}
-          >
-            <Monitor aria-hidden="true" size={18} />
-          </ThemeButton>
-          <ThemeButton
-            label={strings.lightTheme}
-            active={theme === "light"}
-            onClick={() => onThemeChange("light")}
-          >
-            <Sun aria-hidden="true" size={18} />
-          </ThemeButton>
-          <ThemeButton
-            label={strings.darkTheme}
-            active={theme === "dark"}
-            onClick={() => onThemeChange("dark")}
-          >
-            <Moon aria-hidden="true" size={18} />
-          </ThemeButton>
+        <div className="viewer-tools">
+          <div className="theme-controls" role="group" aria-label={strings.theme}>
+            <ThemeButton
+              label={strings.systemTheme}
+              active={theme === "system"}
+              onClick={() => onThemeChange("system")}
+            >
+              <Monitor aria-hidden="true" size={18} />
+            </ThemeButton>
+            <ThemeButton
+              label={strings.lightTheme}
+              active={theme === "light"}
+              onClick={() => onThemeChange("light")}
+            >
+              <Sun aria-hidden="true" size={18} />
+            </ThemeButton>
+            <ThemeButton
+              label={strings.darkTheme}
+              active={theme === "dark"}
+              onClick={() => onThemeChange("dark")}
+            >
+              <Moon aria-hidden="true" size={18} />
+            </ThemeButton>
+          </div>
+          <AudienceHelp language={uiLanguage} theme={theme} strings={strings} />
         </div>
       </div>
 
