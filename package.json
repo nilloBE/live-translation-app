@@ -11,7 +11,8 @@
     "server"
   ],
   "scripts": {
-    "test": "node --import tsx scripts/test-realtime.mjs",
+    "test": "npm run test:transcript && node --import tsx scripts/test-realtime.mjs",
+    "test:transcript": "node --import tsx --test scripts/test-transcript.mjs",
     "test:deployment": "pwsh -NoProfile -File scripts/test-speech-resource.ps1",
     "dev": "concurrently \"npm run dev:run --workspace @live-translation/server\" \"npm run dev --workspace @live-translation/client-speaker\" \"npm run dev --workspace @live-translation/client-audience\" \"npm run dev --workspace @live-translation/client-admin\"",
     "dev:server": "npm run dev --workspace @live-translation/server",

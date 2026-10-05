@@ -1,7 +1,10 @@
+import { englishTranscriptLabels, type TranscriptLabels } from "@live-translation/shared";
+
 export type UiLanguage = "fr" | "nl" | "en";
 
-export interface AudienceStrings {
+export interface AudienceStrings extends TranscriptLabels {
   appName: string;
+  downloadTranscript: string;
   chooseLanguage: string;
   chooseLanguageHint: string;
   connectToRoom: string;
@@ -45,6 +48,10 @@ export const uiLanguages: Array<{ code: UiLanguage; label: string; targetCode: s
 export const strings: Record<UiLanguage, AudienceStrings> = {
   fr: {
     appName: "Sous-titres en direct",
+    aiDisclaimer: "Transcription et traduction générées par l'intelligence artificielle (IA).",
+    originalText: "Transcription originale",
+    translatedText: "Traduction",
+    downloadTranscript: "Télécharger la transcription",
     chooseLanguage: "Choisissez votre langue",
     chooseLanguageHint: "Cette langue règle l'interface. Vous pourrez choisir séparément la langue des transcriptions.",
     connectToRoom: "Rejoindre une salle",
@@ -80,6 +87,10 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
   },
   nl: {
     appName: "Live ondertitels",
+    aiDisclaimer: "Transcriptie en vertaling gegenereerd door kunstmatige intelligentie (AI).",
+    originalText: "Oorspronkelijke transcriptie",
+    translatedText: "Vertaling",
+    downloadTranscript: "Transcriptie downloaden",
     chooseLanguage: "Kies je taal",
     chooseLanguageHint: "Deze taal bepaalt de interface. Je kiest de transcriptietaal later apart.",
     connectToRoom: "Ga naar een ruimte",
@@ -114,7 +125,9 @@ export const strings: Record<UiLanguage, AudienceStrings> = {
     status: "Status",
   },
   en: {
+    ...englishTranscriptLabels,
     appName: "Live captions",
+    downloadTranscript: "Download transcript",
     chooseLanguage: "Choose your language",
     chooseLanguageHint: "This sets the interface language. You can choose the transcription language separately.",
     connectToRoom: "Join a room",

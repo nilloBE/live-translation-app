@@ -5,6 +5,9 @@ import {
   clampFontScaleIndex,
   createCaptionStreamState,
   defaultCaptionFontScaleIndex,
+  downloadTranscript,
+  englishTranscriptLabels,
+  formatTranscriptText,
   reduceCaptionStream,
 } from "@live-translation/shared";
 import { SessionControls } from "./components/SessionControls";
@@ -158,7 +161,7 @@ export function App() {
             timestamp: new Date().toISOString(),
           };
 
-          if (Object.keys(update.translations).length > 0) {
+          if (update.originalText || Object.keys(update.translations).length > 0) {
             setCaptionStream((current) => reduceCaptionStream(current, caption, captionHistoryLimit));
           }
 
@@ -232,6 +235,16 @@ export function App() {
     setNotice("Speaker transcript cleared");
   }
 
+  function handleDownloadTranscript() {
+    const targetLanguage = previewTarget || speakerTargets[0] || "";
+    downloadTranscript(formatTranscriptText({
+      history: captionStream.history,
+      live: captionStream.live,
+      targetLanguage,
+      labels: englishTranscriptLabels,
+    }), roomId, targetLanguage);
+  }
+
   function handleIncreaseFont() {
     setFontIndex((current) => clampFontScaleIndex(current + 1));
   }
@@ -252,6 +265,7 @@ export function App() {
           <div>
             <p className="eyebrow">Speaker console</p>
             <h1 id="app-title">Live Translation App</h1>
+            <p className="ai-disclaimer">{englishTranscriptLabels.aiDisclaimer}</p>
           </div>
           <div className="theme-controls" role="group" aria-label="Theme">
             <ThemeButton label="Use system theme" active={theme === "system"} onClick={() => setTheme("system")}>
@@ -313,6 +327,8 @@ export function App() {
           onStart={startListening}
           onStop={stopListening}
           onClear={clearSpeakerTranscript}
+          onDownload={handleDownloadTranscript}
+          canDownload={captionStream.history.length > 0 || Boolean(originalText) || Object.values(translations).some(Boolean)}
         />
       </section>
 

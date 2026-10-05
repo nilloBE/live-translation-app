@@ -190,6 +190,14 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 
 The audience app is designed for phone, tablet, and desktop screens. It shows connection and speaker-language status, reconnects automatically after transient network interruptions, and remembers the UI language, room code, caption language, text size, and theme between visits.
 
+### Transcript downloads and AI disclosure
+
+The speaker and audience views show a visible AI-generation notice. Use the download icon to save a UTF-8 `.txt` snapshot containing the original transcription and the currently selected translation (the speaker's preview tab or the audience's **Read in** language). Downloads work while captions are arriving or after stopping/disconnecting; the button is disabled until text is available.
+
+Each file starts with the AI disclaimer on its first line. Audience notices, download labels, and file headings follow the selected UI language (French, Dutch, or English), independently of the translation language. The speaker UI and its file headings remain in English.
+
+Exports contain this browser's retained history (up to 100 finalized captions), followed by the current in-progress caption, if present. They are not full-session archives: text from before joining, older evicted captions, and cleared history cannot be recovered. In-progress text may still change. Files are generated locally in the browser; no transcript storage or new backend endpoint is introduced.
+
 ### Admin (operators)
 
 1. Open the admin app at `https://<swa-hostname>/admin/` (or `http://localhost:5175` locally).
