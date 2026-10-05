@@ -33,10 +33,10 @@ Azure service authentication uses Microsoft Entra ID, without Azure resource API
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| Speaker app | `client-speaker/` | Responsive React + Vite console. Captures microphone audio, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, broadcasts translated captions to the room, and supports a paste-in glossary to improve recognition of names and acronyms. Includes caption sizing and system, light, and dark themes. |
+| Speaker app | `client-speaker/` | Responsive React + Vite console. Captures microphone audio, fetches a Speech token from the backend, runs the Azure Speech SDK in-browser, broadcasts translated captions to the room, and supports editable recognition hints for names and acronyms. Includes transcript downloads, caption sizing, and system, light, and dark themes. |
 | Audience app | `client-audience/` | Mobile-first React + Vite viewer. Connects to the backend via Socket.IO, lets each viewer pick a target language, and displays live subtitles with connection status, recent-caption history, adjustable text size, and system, light, and dark themes. |
 | Admin app | `client-admin/` | React + Vite monitoring dashboard for operators. Shows active rooms, live connection counts, whether each room has a speaker, captions relayed, rejected/malformed messages, and server uptime/memory. Gated by a shared `ADMIN_API_KEY`, not by Entra ID. |
-| Shared package | `shared/` | Caption protocol types, room normalization, language catalog, and Socket.IO client factory shared by the speaker and audience apps. |
+| Shared package | `shared/` | Caption protocol types and history reducer, transcript export helpers, room normalization, language catalog, and Socket.IO client factory shared by the speaker and audience apps. |
 | Backend server | `server/` | Node.js + Express. Speech token broker (`/api/speech-token`), Socket.IO relay, admin metrics API/namespace (`/api/admin/status`, `/admin`), and CORS. Runs in Docker. |
 
 ### Azure Resources
@@ -113,7 +113,11 @@ The admin dashboard uses a private `ADMIN_API_KEY` unrelated to Azure resource a
 
 ### Last recorded Azure validation
 
-The dev deployment on **2026-09-26**, from application commit `cab401b`, passed the following checks:
+The latest recorded frontend deployment on **2026-10-04**, from commit `7788741`, added transcript downloads and localized AI notices. It passed six transcript regression tests, workspace typechecks, production client builds, SHA-256 comparisons of all nine published HTML/JS/CSS files, and live relay/admin smoke checks. Browser checks confirmed the speaker's 20 recognition hints and the French audience notice directly beneath **Sous-titres en direct**. No Speech requests or audio were sent during this deployment verification.
+
+This was a frontend-only update: the backend revision, Speech resource, RBAC, and infrastructure were unchanged. [PR #2](https://github.com/nilloBE/live-translation-app/pull/2) was subsequently merged into `main` on **2026-10-05** (`bf0debf`).
+
+The earlier backend deployment on **2026-09-26**, from application commit `cab401b`, passed the following checks:
 
 - In-place Speech upgrade from F0 to paid S0, with actual tier readback.
 - One healthy serving revision with min/max replicas set to 1 and one actual ready replica (0.5 vCPU / 1 GiB).
@@ -171,13 +175,13 @@ You will be asked to confirm by typing the resource group name. Use `-Force` to 
 1. Open the speaker app at `https://<swa-hostname>/speaker/` (or `http://localhost:5173` locally).
 2. Choose your spoken language from the source language dropdown.
 3. Select one or more target languages using the language chips.
-4. (Optional) Paste domain terms, names, or acronyms into the **Glossary** box — one per line — to help the recognizer transcribe them correctly (for example `AKS`, `Contoso`, `Kubernetes`). The glossary is remembered per device.
+4. Review or edit **Recognition hints (one term per line)** before starting. The app supplies 20 default domain terms, including `VASCAPA`, `CMV`, and `Saint-Luc`. A list already saved in this browser takes precedence over those defaults; your edits are remembered for future sessions.
 5. Share the generated room code with your audience (use the copy button).
 6. Click **Start** and allow microphone access when prompted.
 7. The app will begin capturing and translating your speech in real-time. Use the preview tabs to check each target language translation.
 8. Use the display controls to adjust caption size or follow the system, light, or dark theme. These settings are remembered on the device.
 
-> The glossary uses the Azure Speech SDK **phrase list** feature. It biases speech **recognition** toward your terms (up to 500), so acronyms and names are transcribed accurately. It does not change how those terms are translated into each target language.
+> Recognition hints use the Azure Speech SDK **phrase list** feature. When you click **Start**, the app trims the list, removes blank lines and case-insensitive duplicates, and sends up to 500 terms to the recognizer. Hints can help with the original transcription, but do not guarantee accuracy or define how terms are translated into target languages.
 
 ### Audience (viewers)
 
@@ -192,7 +196,7 @@ The audience app is designed for phone, tablet, and desktop screens. It shows co
 
 ### Transcript downloads and AI disclosure
 
-The speaker and audience views show a visible AI-generation notice. Use the download icon to save a UTF-8 `.txt` snapshot containing the original transcription and the currently selected translation (the speaker's preview tab or the audience's **Read in** language). Downloads work while captions are arriving or after stopping/disconnecting; the button is disabled until text is available.
+The speaker and audience views show a visible AI-generation notice. Use the downward-arrow download icon next to **Clear** in the speaker console, or beside the **Read in** selector in the audience view, to save a UTF-8 `.txt` snapshot containing the original transcription and the currently selected translation (the speaker's preview tab or the audience's **Read in** language). Downloads work while captions are arriving or after stopping/disconnecting; the button is disabled until text is available. Hover over the icon to see its localized download label.
 
 Each file starts with the AI disclaimer on its first line. Audience notices, download labels, and file headings follow the selected UI language (French, Dutch, or English), independently of the translation language. The speaker UI and its file headings remain in English.
 
@@ -297,7 +301,9 @@ $env:LOAD_SECONDS='60'
 try { npm test } finally { Remove-Item Env:LOAD_AUDIENCES; Remove-Item Env:LOAD_SECONDS }
 ```
 
-Deployment tests mock Azure calls; the relay tests use synthetic text and a stub token route. Neither spends Speech quota. To recheck a deployed backend/frontends, `node scripts/deployment-smoke.mjs <api-url> <frontend-url>` uses `ADMIN_API_KEY` from the process environment and a disposable synthetic room, not Speech.
+`npm test` runs the transcript export regression suite followed by the relay suite. To check only transcript formatting, localization, retained history, and the browser download helper, run `npm run test:transcript`.
+
+Deployment tests mock Azure calls; transcript tests use a simulated browser environment, and relay tests use synthetic text and a stub token route. None spends Speech quota. To recheck a deployed backend/frontends, `node scripts/deployment-smoke.mjs <api-url> <frontend-url>` uses `ADMIN_API_KEY` from the process environment and a disposable synthetic room, not Speech.
 
 ## Project Structure
 
@@ -319,6 +325,7 @@ live-translation-app/
 │   ├── deployment-smoke.mjs   # Health, frontend, relay and admin smoke checks
 │   ├── test-speech-resource.ps1 # Mocked deployment tests and PowerShell parsing
 │   ├── test-realtime.mjs      # Synthetic relay, limits and reconnect tests
+│   ├── test-transcript.mjs    # Transcript formatting, localization and download tests
 │   └── cleanup-azure.ps1      # Delete all Azure resources
 ├── docker-compose.yml         # Unvalidated backend + three-frontend dev stack
 ├── .env.example               # Shared non-secret placeholders
